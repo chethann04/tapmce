@@ -1,0 +1,88 @@
+name: Deploy and Test Supabase Email Function
+
+on:
+  push:
+    branches:
+      - main
+      - harry
+  workflow_dispatch:
+    inputs:
+      recipient:
+        description: "Recipient Email"
+        required: true
+        default: "test@example.com"
+
+jobs:
+  deploy-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy Edge Function (Email)
+        run: supabase functions deploy send-email --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy Edge Function (FCM Push)
+        run: supabase functions deploy send-fcm-push --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy Edge Function (OTP)
+        run: supabase functions deploy send-otp --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Apply Edge Function SMTP Secrets
+        id: apply-secrets
+        run: |
+          supabase secrets set \
+            SMTP_HOST="$SMTP_HOST" \
+            SMTP_PORT="$SMTP_PORT" \
+            SMTP_EMAIL="$SMTP_EMAIL" \
+            SMTP_PASSWORD="$SMTP_PASSWORD" \
+            --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST || 'smtp.gmail.com' }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT || '465' }}
+          SMTP_EMAIL: ${{ secrets.SMTP_EMAIL }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+
+      - name: Apply Database Migrations
+        run: |
+          if [ -n "$SUPABASE_DB_PASSWORD" ]; then
+            supabase db push --password "$SUPABASE_DB_PASSWORD"
+          else
+            supabase db push --linked || echo "Skipping db push (no DB password provided in secrets)"
+          fi
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Test Email Dispatch
+        if: ${{ github.event.inputs.recipient != '' }}
+        run: |
+          echo "Sending test email to ${{ github.event.inputs.recipient }}..."
+          curl -i -X POST "https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/send-email" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "emailType": "welcome",
+              "recipient": "'"${{ github.event.inputs.recipient }}"'",
+              "subject": "Test Email from GitHub Actions CI/CD",
+              "data": {
+                "studentName": "Test User",
+                "role": "Student",
+                "department": "Computer Science & Engineering"
+              }
+            }'

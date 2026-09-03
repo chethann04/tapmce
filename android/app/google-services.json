@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "816480739666",
+    "project_id": "placement-connect-61be0",
+    "storage_bucket": "placement-connect-61be0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:816480739666:android:ee532780f2d5aa8fcb1a8b",
+        "android_client_info": {
+          "package_name": "com.placementconnect.placement_connect"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB_GVfKwjt1Y5NRMCFQsH3N_1lCYDjSlr4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

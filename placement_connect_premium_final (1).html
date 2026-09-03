@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Placement Connect — Premium Final</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,450;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F1F2F4; --surface-1:#FFFFFF; --surface-2:#E9EAEC;
+    --ink:#14171C; --ink-muted:#5B6472; --border:#DADCE1;
+    --brass-a:#C89446; --brass-b:#8B5E1E; --brass:#A9752F; --brass-soft:rgba(169,117,47,.14); --on-brass:#FFFFFF;
+    --success:#2F6B4F; --success-soft:rgba(47,107,79,.12);
+    --alert:#B33F3A; --alert-soft:rgba(179,63,58,.12);
+    --info:#3E5C76; --info-soft:rgba(62,92,118,.12);
+    --shadow-1:0 2px 4px rgba(20,23,28,.05), 0 4px 12px rgba(20,23,28,.05);
+    --shadow-2:0 10px 24px rgba(20,23,28,.10), 0 24px 48px rgba(20,23,28,.10);
+    --shadow-3:0 20px 50px rgba(20,23,28,.16);
+    --font-display:'Fraunces', serif; --font-body:'Inter', sans-serif; --font-mono:'IBM Plex Mono', monospace;
+    --sp1:4px; --sp2:8px; --sp3:12px; --sp4:16px; --sp5:20px; --sp6:24px; --sp7:32px; --sp8:40px;
+  }
+  html[data-theme="dark"]{
+    --bg:#000000; --surface-1:#121316; --surface-2:#1E2024;
+    --ink:#F2F1EC; --ink-muted:#9AA3AF; --border:#26282D;
+    --brass-a:#D9A758; --brass-b:#A9752F; --brass:#C89446; --brass-soft:rgba(200,148,70,.2); --on-brass:#0A0A0B;
+    --success:#4C9172; --success-soft:rgba(76,145,114,.16);
+    --alert:#D6635D; --alert-soft:rgba(214,99,93,.16);
+    --info:#6C8FB0; --info-soft:rgba(108,143,176,.16);
+    --shadow-1:0 2px 4px rgba(0,0,0,.5);
+    --shadow-2:0 20px 50px rgba(0,0,0,.65);
+    --shadow-3:0 24px 60px rgba(0,0,0,.75);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:var(--font-body); background:#17181a; min-height:100vh; display:flex; flex-direction:column; align-items:center; gap:var(--sp5); padding:var(--sp7) var(--sp4) 60px;}
+  button{font-family:inherit; cursor:pointer; border:none; background:none;}
+  :focus-visible{outline:2px solid var(--brass); outline-offset:2px;}
+
+  .controls{display:flex; gap:var(--sp2); flex-wrap:wrap; justify-content:center; max-width:420px;}
+  .seg{display:flex; background:#fff; padding:4px; border-radius:12px; box-shadow:0 4px 14px rgba(0,0,0,.25); gap:2px;}
+  .seg button{padding:8px 13px; border-radius:9px; font-size:.74rem; font-weight:600; color:#666;}
+  .seg button.active{background:#14171C; color:#fff;}
+  .demo-label{color:#eee; font-size:.72rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; opacity:.6;}
+
+  .phone{width:380px; height:800px; border-radius:44px; background:#050505; padding:14px; box-shadow:0 30px 70px rgba(0,0,0,.55);}
+  .screen{width:100%; height:100%; border-radius:32px; overflow:hidden; position:relative; background:var(--bg); color:var(--ink); display:flex; flex-direction:column; transition:background .2s, color .2s;}
+
+  /* edge-to-edge: statusbar draws OVER content, content scrolls beneath it */
+  .statusbar{display:flex; justify-content:space-between; align-items:center; padding:calc(env(safe-area-inset-top,0px) + 14px) 24px 6px; font-size:.72rem; font-weight:600; color:var(--ink); flex-shrink:0; position:absolute; top:0; left:0; right:0; z-index:6; pointer-events:none;}
+  html[data-theme="dark"] .statusbar{color:#fff;}
+  .statusbar .icons{display:flex; gap:5px; align-items:center;}
+
+  .content{flex:1; overflow-y:auto; padding:52px var(--sp5) 96px; position:relative; z-index:1;}
+  .content::-webkit-scrollbar{display:none;}
+
+  /* predictive-back affordance: outgoing pane scales + rounds when navigating */
+  .pane-transition{transition:transform .22s cubic-bezier(.2,.8,.2,1), border-radius .22s;}
+
+  /* floating pill nav: active item expands to icon+label pill, inactive items are circular icon buttons */
+  .bottomnav{display:flex; justify-content:center; align-items:center; gap:8px; padding:8px; flex-shrink:0; position:absolute; left:16px; right:16px; bottom:calc(14px + env(safe-area-inset-bottom,0px)); z-index:5; background:var(--surface-1); border-radius:100px; box-shadow:var(--shadow-3); border:1px solid var(--border);}
+  html[data-theme="dark"] .bottomnav{background:#0B0C0E; border-color:#242529;}
+  .nav-item{display:flex; align-items:center; justify-content:center; gap:7px; color:var(--ink); width:44px; height:44px; min-height:44px; border-radius:100px; background:var(--surface-2); flex-shrink:0; overflow:hidden; transition:width .28s cubic-bezier(.2,.8,.2,1), background .2s, color .2s, flex-grow .28s;}
+  html[data-theme="dark"] .nav-item{background:#26282D; color:#E7E5DF;}
+  .nav-item svg{width:19px; height:19px; flex-shrink:0; display:block;}
+  .nav-item span{font-size:.78rem; font-weight:700; white-space:nowrap; max-width:0; overflow:hidden; opacity:0; transition:max-width .28s cubic-bezier(.2,.8,.2,1), opacity .18s;}
+  .nav-item.active{width:auto; flex-grow:1; padding:0 20px; background:linear-gradient(135deg,var(--brass-a),var(--brass-b)); color:var(--on-brass); box-shadow:0 8px 20px var(--brass-soft);}
+  .nav-item.active span{max-width:100px; opacity:1;}
+
+  .eyebrow{font-size:.66rem; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-muted);}
+  .display{font-family:var(--font-display); font-weight:600; letter-spacing:-.01em;}
+  .mono{font-family:var(--font-mono);}
+  .gradient-text{background:linear-gradient(135deg,var(--brass-a),var(--brass-b)); -webkit-background-clip:text; background-clip:text; color:transparent;}
+
+  /* shape scale: small controls plain-round, cards continuous-corner, hero superellipse */
+  .card{background:var(--surface-1); border:1px solid var(--border); border-radius:22px; box-shadow:var(--shadow-1);}
+  .card-hero{border-radius:28px; box-shadow:var(--shadow-2), 0 0 0 1px var(--brass-soft) inset;}
+  .superellipse{clip-path:path('M0,56 C0,12 12,0 56,0 L244,0 C288,0 300,12 300,56 L300,244 C300,288 288,300 244,300 L56,300 C12,300 0,288 0,244 Z');}
+
+  .badge{display:inline-flex; align-items:center; gap:5px; padding:4px 11px; border-radius:100px; font-size:.68rem; font-weight:700;}
+  .badge.brass{background:var(--brass-soft); color:var(--brass);}
+  .badge.success{background:var(--success-soft); color:var(--success);}
+  .badge.info{background:var(--info-soft); color:var(--info);}
+  .badge.alert{background:var(--alert-soft); color:var(--alert);}
+
+  .grain{position:absolute; inset:0; opacity:.05; pointer-events:none; mix-blend-mode:overlay; z-index:4; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");}
+  html[data-theme="dark"] .grain{opacity:.09;}
+
+  .stagger{opacity:0; transform:translateY(10px); animation:rise .55s cubic-bezier(.2,.8,.2,1) forwards;}
+  @keyframes rise{to{opacity:1; transform:none;}}
+  @media (prefers-reduced-motion: reduce){ .stagger{animation:none; opacity:1; transform:none;} }
+
+  /* pull to refresh */
+  .ptr{display:flex; align-items:center; justify-content:center; height:0; overflow:hidden; transition:height .25s cubic-bezier(.2,.8,.2,1);}
+  .ptr.show{height:44px;}
+  .ptr-spinner{width:22px; height:22px; border-radius:50%; border:2.5px solid var(--brass-soft); border-top-color:var(--brass); animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* skeleton loading */
+  .skel{background:linear-gradient(90deg, var(--surface-2) 25%, var(--surface-1) 50%, var(--surface-2) 75%); background-size:200% 100%; animation:shimmer 1.4s infinite;}
+  @media (prefers-reduced-motion: reduce){ .skel{animation:none; background:var(--surface-2);} }
+  @keyframes shimmer{from{background-position:200% 0;} to{background-position:-200% 0;}}
+  .skel-row{display:flex; gap:12px; align-items:center; padding:18px; border-radius:22px; background:var(--surface-1); border:1px solid var(--border); margin-bottom:12px;}
+  .skel-box{border-radius:14px; flex-shrink:0;}
+  .skel-line{border-radius:6px;}
+
+  /* empty / error states */
+  .state-block{display:flex; flex-direction:column; align-items:center; text-align:center; gap:10px; padding:56px 20px; color:var(--ink-muted);}
+  .state-icon{width:56px; height:56px; border-radius:20px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; color:var(--ink-muted);}
+  .state-icon.alert{background:var(--alert-soft); color:var(--alert);}
+  .state-title{font-weight:700; color:var(--ink); font-size:.92rem;}
+  .state-body{font-size:.78rem; line-height:1.5; max-width:250px;}
+  .state-action{margin-top:6px; padding:10px 18px; border-radius:14px; background:var(--brass-soft); color:var(--brass); font-weight:700; font-size:.78rem;}
+
+  .thread{position:relative; padding-top:6px;}
+  .thread-track{position:absolute; top:11px; left:9px; right:9px; height:2px; background:var(--border); border-radius:2px;}
+  .thread-fill{position:absolute; top:11px; left:9px; height:2px; background:linear-gradient(90deg,var(--brass-b),var(--brass-a)); border-radius:2px; transition:width .5s cubic-bezier(.2,.8,.2,1); box-shadow:0 0 10px var(--brass-soft);}
+  .thread-nodes{display:flex; justify-content:space-between; position:relative;}
+  .thread-node{display:flex; flex-direction:column; align-items:center; gap:6px; width:60px;}
+  .node-dot{width:9px; height:9px; border-radius:50%; background:var(--surface-1); border:2px solid var(--border);}
+  .thread-node.done .node-dot{background:linear-gradient(135deg,var(--brass-a),var(--brass-b)); border-color:transparent;}
+  .thread-node.current .node-dot{background:var(--surface-1); border-color:var(--brass); box-shadow:0 0 0 5px var(--brass-soft);}
+  .node-label{font-size:.6rem; font-weight:600; color:var(--ink-muted); text-align:center; line-height:1.2;}
+  .thread-node.done .node-label, .thread-node.current .node-label{color:var(--ink);}
+
+  .login-screen{flex:1; display:flex; flex-direction:column; justify-content:center; padding:0 var(--sp6) 40px; gap:var(--sp6); position:relative; overflow:hidden;}
+  .login-glow{position:absolute; top:-60px; left:50%; transform:translateX(-50%); width:280px; height:280px; border-radius:50%; background:radial-gradient(circle, var(--brass-soft), transparent 70%); filter:blur(10px); z-index:0;}
+  .login-orb{width:130px; height:130px; margin:0 auto; border-radius:38% 62% 58% 42% / 48% 38% 62% 52%; background:linear-gradient(135deg, var(--brass-a), var(--brass-b)); display:flex; align-items:center; justify-content:center; animation:float 7s ease-in-out infinite; box-shadow:0 20px 40px var(--brass-soft); position:relative; z-index:1;}
+  @media (prefers-reduced-motion: reduce){ .login-orb{animation:none;} }
+  @keyframes float{0%,100%{transform:translateY(0) rotate(0deg);} 50%{transform:translateY(-8px) rotate(4deg);}}
+  .login-mark{font-size:2rem; text-align:center; position:relative; z-index:1;}
+  .login-sub{text-align:center; color:var(--ink-muted); font-size:.85rem; margin-top:-10px; position:relative; z-index:1;}
+  .role-seg{display:flex; background:var(--surface-2); border-radius:16px; padding:4px; position:relative; z-index:1;}
+  .role-seg button{flex:1; padding:9px; border-radius:12px; font-size:.78rem; font-weight:700; color:var(--ink-muted);}
+  .role-seg button.active{background:var(--surface-1); color:var(--ink); box-shadow:var(--shadow-1);}
+  .oauth-btn{display:flex; align-items:center; justify-content:center; gap:10px; padding:14px; border-radius:16px; border:1px solid var(--border); background:var(--surface-1); font-size:.85rem; font-weight:700; box-shadow:var(--shadow-1); position:relative; z-index:1;}
+  .btn-primary{background:linear-gradient(135deg,var(--brass-a),var(--brass-b)); color:var(--on-brass); padding:16px; border-radius:16px; font-weight:700; font-size:.9rem; text-align:center; box-shadow:0 14px 30px var(--brass-soft); position:relative; z-index:1;}
+
+  .greet{font-size:1.7rem; margin:14px 0 2px;}
+  .greet-sub{color:var(--ink-muted); font-size:.8rem; margin-bottom:var(--sp5);}
+  .bento{display:grid; grid-template-columns:1.3fr 1fr; grid-template-rows:auto auto; gap:var(--sp3); margin-bottom:var(--sp5);}
+  .bento .b1{grid-row:span 2; padding:var(--sp5); display:flex; flex-direction:column; justify-content:space-between; position:relative; overflow:hidden;}
+  .bento .b1::before{content:""; position:absolute; top:-40px; right:-40px; width:140px; height:140px; border-radius:50%; background:radial-gradient(circle, var(--brass-soft), transparent 70%);}
+  .bento .b2, .bento .b3{padding:var(--sp4);}
+  .bento-num{font-size:2.1rem; line-height:1;}
+  .bento-label{font-size:.72rem; color:var(--ink-muted); margin-top:4px;}
+
+  .drive-scroll{display:flex; gap:var(--sp3); overflow-x:auto; margin:0 calc(var(--sp5) * -1) var(--sp5); padding:0 var(--sp5) 4px; scroll-snap-type:x mandatory;}
+  .drive-scroll::-webkit-scrollbar{display:none;}
+  .drive-card{min-width:220px; padding:var(--sp4); scroll-snap-align:start; display:flex; flex-direction:column; gap:10px;}
+  .drive-logo{width:38px; height:38px; border-radius:13px; background:linear-gradient(135deg,var(--brass-a),var(--brass-b)); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.75rem;}
+
+  .fab{position:absolute; right:20px; bottom:104px; width:58px; height:58px; border-radius:20px; background:linear-gradient(135deg,var(--brass-a),var(--brass-b)); color:var(--on-brass); display:flex; align-items:center; justify-content:center; box-shadow:0 16px 32px var(--brass-soft); z-index:5; transition:transform .12s;}
+  .fab:active{transform:scale(.94);}
+
+  .chips{display:flex; gap:var(--sp2); margin:var(--sp4) 0 var(--sp4); overflow-x:auto;}
+  .chip{padding:8px 16px; border-radius:100px; font-size:.76rem; font-weight:600; background:var(--surface-2); color:var(--ink-muted); white-space:nowrap;}
+  .chip.active{background:linear-gradient(135deg,var(--brass-a),var(--brass-b)); color:#fff;}
+  .app-item{padding:var(--sp5); margin-bottom:var(--sp3); display:flex; flex-direction:column; gap:var(--sp4);}
+  .app-top{display:flex; align-items:center; gap:var(--sp3);}
+  .app-logo{width:40px; height:40px; border-radius:14px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.75rem; flex-shrink:0;}
+  .app-name{font-weight:700; font-size:.92rem;}
+  .app-role{font-size:.75rem; color:var(--ink-muted);}
+
+  .detail-hero{padding:26px 4px 20px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:10px; position:relative;}
+  .detail-glow{position:absolute; top:-20px; left:50%; transform:translateX(-50%); width:200px; height:200px; border-radius:50%; background:radial-gradient(circle, var(--brass-soft), transparent 70%); z-index:0;}
+  .detail-logo{width:68px; height:68px; border-radius:24px; background:linear-gradient(135deg,var(--brass-a),var(--brass-b)); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.15rem; box-shadow:0 16px 30px var(--brass-soft); position:relative; z-index:1;}
+  .detail-role{font-size:1.55rem; position:relative; z-index:1;}
+  .timeline-log{display:flex; gap:14px; padding:14px 0; border-top:1px solid var(--border);}
+  .timeline-log:first-child{border-top:none;}
+  .log-dot{width:8px; height:8px; border-radius:50%; background:linear-gradient(135deg,var(--brass-a),var(--brass-b)); margin-top:6px; flex-shrink:0;}
+  .log-text{font-size:.82rem;}
+  .log-time{font-size:.7rem; color:var(--ink-muted); margin-top:2px;}
+
+  .profile-head{display:flex; flex-direction:column; align-items:center; gap:10px; padding:22px 0;}
+  .avatar-lg{width:76px; height:76px; border-radius:28px; background:linear-gradient(135deg,var(--brass-a),var(--brass-b)); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.35rem; box-shadow:0 16px 32px var(--brass-soft);}
+  .settings-group{margin-bottom:18px;}
+  .settings-group-title{font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-muted); margin-bottom:8px; padding:0 4px;}
+  .settings-list{border-radius:22px; overflow:hidden;}
+  .settings-row{display:flex; align-items:center; gap:12px; padding:15px 16px; border-bottom:1px solid var(--border); font-size:.85rem; font-weight:500;}
+  .settings-row:last-child{border-bottom:none;}
+  .radio{width:18px; height:18px; border-radius:50%; border:2px solid var(--border); margin-left:auto; position:relative;}
+  .radio.selected{border-color:var(--brass);}
+  .radio.selected::after{content:""; position:absolute; inset:3px; border-radius:50%; background:linear-gradient(135deg,var(--brass-a),var(--brass-b));}
+</style>
+</head>
+<body>
+<div class="demo-label">Premium final — polish pass applied</div>
+<div class="controls">
+  <div class="seg" id="screen-switch">
+    <button data-screen="login" class="active">Login</button>
+    <button data-screen="app">App</button>
+  </div>
+  <div class="seg" id="theme-switch">
+    <button data-theme="system" class="active">System</button>
+    <button data-theme="light">Light</button>
+    <button data-theme="dark">Black</button>
+  </div>
+  <div class="seg" id="state-switch">
+    <button data-state="normal" class="active">Normal</button>
+    <button data-state="loading">Loading</button>
+    <button data-state="empty">Empty</button>
+    <button data-state="error">Error</button>
+  </div>
+</div>
+
+<div class="phone">
+  <div class="screen" id="screen">
+    <div class="grain"></div>
+    <div class="statusbar">
+      <span>9:41</span>
+      <div class="icons">
+        <svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor"><rect width="2" height="4" y="6"/><rect x="4" width="2" height="7" y="3"/><rect x="8" width="2" height="9" y="1"/><rect x="12" width="2" height="10"/></svg>
+        <svg width="18" height="10" viewBox="0 0 18 10" fill="none" stroke="currentColor" stroke-width="1"><rect x="0.5" y="0.5" width="15" height="9" rx="2"/><rect x="2" y="2" width="10" height="6" fill="currentColor"/><path d="M16.5 3.5v3" stroke-width="1.2"/></svg>
+      </div>
+    </div>
+
+    <div class="login-screen" id="pane-login">
+      <div class="login-glow"></div>
+      <div class="login-orb">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6"><path d="M12 3l9 4.5-9 4.5-9-4.5L12 3z"/><path d="M3 12l9 4.5 9-4.5"/></svg>
+      </div>
+      <div>
+        <div class="login-mark display">Placement Connect</div>
+        <div class="login-sub">Sign in to track your placement season</div>
+      </div>
+      <div class="role-seg">
+        <button class="active">Student</button>
+        <button>Faculty</button>
+        <button>TPO</button>
+      </div>
+      <button class="oauth-btn">
+        <svg width="15" height="15" viewBox="0 0 16 16"><rect width="7" height="7" fill="#C89446"/><rect x="9" width="7" height="7" fill="#5B6472"/><rect y="9" width="7" height="7" fill="#5B6472"/><rect x="9" y="9" width="7" height="7" fill="#3E5C76"/></svg>
+        Continue with Microsoft
+      </button>
+      <div class="btn-primary">Sign in with email</div>
+    </div>
+
+    <div id="pane-app" style="display:none; flex:1; flex-direction:column; min-height:0; position:relative;">
+
+      <div class="content pane-transition" id="tab-home">
+        <div class="ptr" id="ptr"><div class="ptr-spinner"></div></div>
+
+        <!-- NORMAL state -->
+        <div id="home-normal">
+          <div class="greet display">Hey, <span class="gradient-text">Sumukha</span></div>
+          <div class="greet-sub">Batch 2027 · ISE</div>
+
+          <div class="bento">
+            <div class="card b1 card-hero superellipse stagger" style="animation-delay:.02s">
+              <div>
+                <div class="bento-num display gradient-text">6</div>
+                <div class="bento-label">Active applications</div>
+              </div>
+              <div class="thread" style="margin-top:16px;">
+                <div class="thread-track"></div>
+                <div class="thread-fill" style="width:66%"></div>
+                <div class="thread-nodes">
+                  <div class="thread-node done"><span class="node-dot"></span></div>
+                  <div class="thread-node done"><span class="node-dot"></span></div>
+                  <div class="thread-node current"><span class="node-dot"></span></div>
+                  <div class="thread-node"><span class="node-dot"></span></div>
+                </div>
+              </div>
+            </div>
+            <div class="card b2 stagger" style="animation-delay:.08s">
+              <div class="bento-num display" style="font-size:1.5rem;">3</div>
+              <div class="bento-label">Shortlisted</div>
+            </div>
+            <div class="card b3 stagger" style="animation-delay:.14s">
+              <div class="bento-num display" style="font-size:1.5rem; color:var(--success);">0</div>
+              <div class="bento-label">Offers</div>
+            </div>
+          </div>
+
+          <div class="eyebrow stagger" style="animation-delay:.18s; margin-bottom:10px;">Open drives for you</div>
+          <div class="drive-scroll">
+            <div class="card drive-card stagger" style="animation-delay:.22s">
+              <div class="drive-logo mono">PP</div>
+              <div style="font-weight:700; font-size:.9rem;">PhonePe</div>
+              <div style="font-size:.75rem; color:var(--ink-muted);">SDE-1 · Closes in <span class="mono">3d</span></div>
+              <span class="badge brass" style="align-self:flex-start;">CGPA 7.0+</span>
+            </div>
+            <div class="card drive-card stagger" style="animation-delay:.28s">
+              <div class="drive-logo mono">RP</div>
+              <div style="font-weight:700; font-size:.9rem;">Razorpay</div>
+              <div style="font-size:.75rem; color:var(--ink-muted);">SDE Intern · Closes in <span class="mono">6d</span></div>
+              <span class="badge info" style="align-self:flex-start;">All branches</span>
+            </div>
+          </div>
+
+          <div class="eyebrow stagger" style="animation-delay:.32s; margin-bottom:10px;">Recent update</div>
+          <div class="card stagger" style="animation-delay:.36s; padding:16px 18px; display:flex; gap:12px; align-items:flex-start;">
+            <span class="badge success" style="margin-top:2px;">✓</span>
+            <div>
+              <div style="font-size:.85rem; font-weight:600;">Google — moved to Interview</div>
+              <div style="font-size:.75rem; color:var(--ink-muted); margin-top:2px;">Round 2 scheduled for <span class="mono">Aug 6</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LOADING state -->
+        <div id="home-loading" style="display:none;">
+          <div class="skel skel-line" style="width:140px; height:22px; margin-bottom:8px;"></div>
+          <div class="skel skel-line" style="width:90px; height:14px; margin-bottom:20px;"></div>
+          <div class="skel skel-box" style="height:180px; border-radius:28px; margin-bottom:20px;"></div>
+          <div class="skel skel-line" style="width:110px; height:12px; margin-bottom:10px;"></div>
+          <div class="skel-row"><div class="skel skel-box" style="width:38px; height:38px;"></div><div style="flex:1;"><div class="skel skel-line" style="width:70%; height:12px; margin-bottom:6px;"></div><div class="skel skel-line" style="width:50%; height:10px;"></div></div></div>
+          <div class="skel-row"><div class="skel skel-box" style="width:38px; height:38px;"></div><div style="flex:1;"><div class="skel skel-line" style="width:60%; height:12px; margin-bottom:6px;"></div><div class="skel skel-line" style="width:40%; height:10px;"></div></div></div>
+        </div>
+
+        <!-- EMPTY state -->
+        <div id="home-empty" style="display:none;">
+          <div class="state-block">
+            <div class="state-icon">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            </div>
+            <div class="state-title">No drives open right now</div>
+            <div class="state-body">Check back after your coordinator publishes this cycle's calendar — you'll get a notification the moment a new drive opens.</div>
+          </div>
+        </div>
+
+        <!-- ERROR state -->
+        <div id="home-error" style="display:none;">
+          <div class="state-block">
+            <div class="state-icon alert">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
+            </div>
+            <div class="state-title">Couldn't load your dashboard</div>
+            <div class="state-body">Your connection dropped while fetching updates. Reconnect and try again.</div>
+            <div class="state-action">Retry</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="content pane-transition" id="tab-applications" style="display:none;">
+        <div class="greet display" style="font-size:1.4rem; margin-top:16px;">Applications</div>
+        <div class="chips">
+          <div class="chip active">All</div>
+          <div class="chip">Active</div>
+          <div class="chip">Closed</div>
+          <div class="chip">Offers</div>
+        </div>
+        <div class="card app-item stagger" style="animation-delay:.02s">
+          <div class="app-top">
+            <div class="app-logo mono">GO</div>
+            <div style="flex:1;"><div class="app-name">Google</div><div class="app-role">SDE-1, Full-time</div></div>
+            <span class="badge brass">Interview</span>
+          </div>
+          <div class="thread">
+            <div class="thread-track"></div>
+            <div class="thread-fill" style="width:66%"></div>
+            <div class="thread-nodes">
+              <div class="thread-node done"><span class="node-dot"></span><span class="node-label">Applied</span></div>
+              <div class="thread-node done"><span class="node-dot"></span><span class="node-label">Shortlist</span></div>
+              <div class="thread-node current"><span class="node-dot"></span><span class="node-label">Interview</span></div>
+              <div class="thread-node"><span class="node-dot"></span><span class="node-label">Offer</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="card app-item stagger" style="animation-delay:.08s">
+          <div class="app-top">
+            <div class="app-logo mono">FL</div>
+            <div style="flex:1;"><div class="app-name">Flipkart</div><div class="app-role">SDE-1, Full-time</div></div>
+            <span class="badge info">Shortlisted</span>
+          </div>
+          <div class="thread">
+            <div class="thread-track"></div>
+            <div class="thread-fill" style="width:33%"></div>
+            <div class="thread-nodes">
+              <div class="thread-node done"><span class="node-dot"></span><span class="node-label">Applied</span></div>
+              <div class="thread-node current"><span class="node-dot"></span><span class="node-label">Shortlist</span></div>
+              <div class="thread-node"><span class="node-dot"></span><span class="node-label">Interview</span></div>
+              <div class="thread-node"><span class="node-dot"></span><span class="node-label">Offer</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="content pane-transition" id="tab-timeline" style="display:none; padding-top:52px;">
+        <div class="detail-hero">
+          <div class="detail-glow"></div>
+          <div class="detail-logo mono">GO</div>
+          <div class="detail-role display">Google</div>
+          <div style="color:var(--ink-muted); font-size:.85rem; position:relative; z-index:1;">SDE-1 · Full-time · Applied <span class="mono">Jul 12</span></div>
+          <span class="badge brass" style="position:relative; z-index:1;">Round 3 of 4</span>
+        </div>
+        <div class="thread" style="margin-bottom:22px;">
+          <div class="thread-track"></div>
+          <div class="thread-fill" style="width:66%"></div>
+          <div class="thread-nodes">
+            <div class="thread-node done"><span class="node-dot"></span><span class="node-label">Applied</span></div>
+            <div class="thread-node done"><span class="node-dot"></span><span class="node-label">Shortlist</span></div>
+            <div class="thread-node current"><span class="node-dot"></span><span class="node-label">Interview</span></div>
+            <div class="thread-node"><span class="node-dot"></span><span class="node-label">Offer</span></div>
+          </div>
+        </div>
+        <div class="eyebrow" style="margin-bottom:6px;">Timeline</div>
+        <div class="card" style="padding:6px 16px;">
+          <div class="timeline-log"><span class="log-dot"></span><div><div class="log-text">Interview round scheduled</div><div class="log-time mono">Aug 6, 10:00 AM</div></div></div>
+          <div class="timeline-log"><span class="log-dot"></span><div><div class="log-text">Shortlisted after OA</div><div class="log-time mono">Jul 22, 6:40 PM</div></div></div>
+          <div class="timeline-log"><span class="log-dot" style="background:var(--border);"></span><div><div class="log-text">Application submitted</div><div class="log-time mono">Jul 12, 11:05 AM</div></div></div>
+        </div>
+      </div>
+
+      <div class="content pane-transition" id="tab-profile" style="display:none;">
+        <div class="profile-head">
+          <div class="avatar-lg">SR</div>
+          <div style="font-weight:700; font-size:1.05rem;">Sumukha R</div>
+          <div style="color:var(--ink-muted); font-size:.8rem;">4MC23IS0XX · ISE, Batch 2027</div>
+        </div>
+        <div class="settings-group">
+          <div class="settings-group-title">Appearance</div>
+          <div class="card settings-list">
+            <div class="settings-row">System <div class="radio selected" data-radio="system"></div></div>
+            <div class="settings-row">Light <div class="radio" data-radio="light"></div></div>
+            <div class="settings-row">True black <div class="radio" data-radio="dark"></div></div>
+          </div>
+        </div>
+        <div class="settings-group">
+          <div class="settings-group-title">Account</div>
+          <div class="card settings-list">
+            <div class="settings-row">Edit profile</div>
+            <div class="settings-row">Resume &amp; certificates</div>
+            <div class="settings-row" style="color:var(--alert);">Sign out</div>
+          </div>
+        </div>
+      </div>
+
+      <button class="fab" id="fab-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+
+      <div class="bottomnav">
+        <div class="nav-item active" data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></div>
+        <div class="nav-item" data-tab="applications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg><span>Applications</span></div>
+        <div class="nav-item" data-tab="timeline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg><span>Timeline</span></div>
+        <div class="nav-item" data-tab="profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg><span>Profile</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const paneLogin = document.getElementById('pane-login');
+  const paneApp = document.getElementById('pane-app');
+  document.querySelectorAll('#screen-switch button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('#screen-switch button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      paneLogin.style.display = btn.dataset.screen === 'login' ? 'flex' : 'none';
+      paneApp.style.display = btn.dataset.screen === 'login' ? 'none' : 'flex';
+    });
+  });
+  document.querySelectorAll('.nav-item').forEach(item=>{
+    item.addEventListener('click', ()=>{
+      document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
+      item.classList.add('active');
+      document.querySelectorAll('#pane-app > .content').forEach(c=>c.style.display='none');
+      const el = document.getElementById('tab-'+item.dataset.tab);
+      el.style.display='block';
+      el.style.transform = 'scale(.97)';
+      requestAnimationFrame(()=>{ el.style.transform = 'scale(1)'; });
+      document.getElementById('fab-btn').style.display = item.dataset.tab === 'home' ? 'flex' : 'none';
+    });
+  });
+  document.querySelectorAll('.settings-row').forEach(row=>{
+    const radio = row.querySelector('.radio');
+    if(!radio) return;
+    row.addEventListener('click', ()=>{
+      document.querySelectorAll('.radio').forEach(r=>r.classList.remove('selected'));
+      radio.classList.add('selected');
+      setTheme(radio.dataset.radio);
+    });
+  });
+  let themeMode = 'system';
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  function setTheme(mode){
+    themeMode = mode;
+    const resolved = mode === 'system' ? (mq.matches ? 'dark' : 'light') : mode;
+    document.documentElement.setAttribute('data-theme', resolved);
+    document.querySelectorAll('#theme-switch button').forEach(b=>b.classList.toggle('active', b.dataset.theme===mode));
+  }
+  mq.addEventListener('change', ()=>{ if(themeMode==='system') setTheme('system'); });
+  document.querySelectorAll('#theme-switch button').forEach(btn=>btn.addEventListener('click', ()=>setTheme(btn.dataset.theme)));
+  setTheme('system');
+
+  // state switcher (normal / loading / empty / error) for the home tab
+  document.querySelectorAll('#state-switch button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('#state-switch button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      ['normal','loading','empty','error'].forEach(s=>{
+        document.getElementById('home-'+s).style.display = (s===btn.dataset.state) ? 'block' : 'none';
+      });
+    });
+  });
+
+  // pull-to-refresh demo: click+hold top of home content
+  const homeContent = document.getElementById('tab-home');
+  const ptr = document.getElementById('ptr');
+  let pulling = false;
+  homeContent.addEventListener('scroll', ()=>{
+    if(homeContent.scrollTop === 0 && !pulling){
+      pulling = true;
+      ptr.classList.add('show');
+      setTimeout(()=>{ ptr.classList.remove('show'); pulling = false; }, 900);
+    }
+  });
+</script>
+</body>
+</html>

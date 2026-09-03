@@ -1,0 +1,92 @@
+name: placement_connect
+description: Production SaaS application for a university placement cell.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # State Management
+  flutter_riverpod: ^2.4.9
+  riverpod_annotation: ^2.3.3
+
+  # Routing
+  go_router: ^13.0.0
+
+  # Backend & Auth
+  supabase_flutter: ^2.3.3
+
+  # Local Storage & Offline
+  drift: ^2.14.1
+  sqlite3_flutter_libs: ^0.5.18
+  path_provider: ^2.1.1
+  path: ^1.8.3
+
+  # Code Generation (Data classes)
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.8.1
+
+  # Network
+  dio: ^5.4.0
+  connectivity_plus: ^7.0.0
+  url_launcher: ^6.2.0
+  mailer: ^6.1.0
+
+  # Security
+  flutter_secure_storage: ^9.0.0
+
+  # Backend
+  firebase_core: ^2.24.2
+
+  # Utilities
+  intl: ^0.19.0
+  uuid: ^4.2.1
+  logging: ^1.2.1
+  google_fonts: ^6.1.0
+  web_socket_channel: ^3.0.3
+
+  # Added for features
+  csv: ^5.1.1
+  pdf: ^3.10.7
+  printing: ^5.11.1
+  qr_flutter: ^4.1.0
+  excel: ^4.0.0
+  file_picker: ^8.0.0
+  image_picker: ^1.1.2
+  image_cropper: ^8.0.0
+  share_plus: ^10.0.0
+  mobile_scanner: ^7.4.0
+  fl_chart: ^0.69.2
+  flutter_local_notifications: ^22.2.0
+  firebase_messaging: ^14.7.10
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+  
+  # Build Runner
+  build_runner: ^2.4.7
+  
+  # Code Generators
+  freezed: ^2.4.6
+  json_serializable: ^6.7.1
+  riverpod_generator: ^2.3.9
+  drift_dev: ^2.14.1
+  mocktail: ^1.0.5
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/mce_logo.jpg"

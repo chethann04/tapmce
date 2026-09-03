@@ -1,0 +1,62 @@
+name: Codemagic Build Workflow
+
+workflows:
+  ios-release:
+    name: iOS Release Build (App Store / TestFlight)
+    max_build_duration: 60
+    instance_type: mac_mini_m1
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      groups:
+        - app_store_credentials # Configure in Codemagic UI: APP_STORE_CONNECT_PRIVATE_KEY, APP_STORE_CONNECT_KEY_IDENTIFIER, APP_STORE_CONNECT_ISSUER_ID
+    scripts:
+      - name: Set up code signing settings on Codemagic
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$(csa_bundle_id)" --type IOS_APP_STORE --create
+          keychain add-certificates
+          xcode-project use-profiles
+      - name: Get Flutter packages
+        script: |
+          flutter packages pub get
+      - name: Install CocoaPods
+        script: |
+          find . -name "Podfile" -execdir pod install \;
+      - name: Flutter analyze & test
+        script: |
+          flutter analyze
+          flutter test
+      - name: Build IPA for App Store
+        script: |
+          flutter build ipa --release \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+
+  android-release:
+    name: Android Release Build (Google Play)
+    max_build_duration: 30
+    instance_type: linux_x2
+    environment:
+      flutter: stable
+      java: 17
+    scripts:
+      - name: Get Flutter packages
+        script: |
+          flutter packages pub get
+      - name: Build Android App Bundle (AAB)
+        script: |
+          flutter build appbundle --release
+      - name: Build Android APK
+        script: |
+          flutter build apk --release
+    artifacts:
+      - build/app/outputs/bundle/release/*.aab
+      - build/app/outputs/flutter-apk/*.apk
