@@ -1,4 +1,5 @@
-﻿import 'dart:convert';
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,6 +8,7 @@ import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../../../core/theme/theme_extensions.dart';
+import '../../../../core/theme/app_haptics.dart';
 import '../../../../shared/presentation/widgets/subtle_divider.dart';
 import '../../../student/domain/entities/drive.dart';
 import '../providers/tpo_provider.dart';
@@ -24,15 +26,23 @@ class DriveQrCodeModal extends ConsumerStatefulWidget {
 class _DriveQrCodeModalState extends ConsumerState<DriveQrCodeModal>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  Timer? _attendanceTimer;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    // Real-time automatic auto-polling every 1500ms while the modal is open
+    _attendanceTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+      if (mounted && _tabController.index == 1) {
+        ref.invalidate(driveAttendanceProvider(widget.drive.id));
+      }
+    });
   }
 
   @override
   void dispose() {
+    _attendanceTimer?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -276,13 +286,12 @@ class _DriveQrCodeModalState extends ConsumerState<DriveQrCodeModal>
                     return Column(
                       children: [
                         Padding(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           child: Row(
                             children: [
-                              Expanded(
+                              Flexible(
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                   decoration: BoxDecoration(
                                     color: accent.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(20),
@@ -290,9 +299,24 @@ class _DriveQrCodeModalState extends ConsumerState<DriveQrCodeModal>
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.check_circle_rounded,
-                                          size: 16, color: accent),
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          color: Colors.greenAccent,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
                                       const SizedBox(width: 6),
+                                      Text(
+                                        'LIVE',
+                                        style: GoogleFonts.inter(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 10,
+                                          color: Colors.greenAccent,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
                                       Flexible(
                                         child: Text(
                                           '${records.length} Scanned',
@@ -309,45 +333,62 @@ class _DriveQrCodeModalState extends ConsumerState<DriveQrCodeModal>
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                               OutlinedButton.icon(
-                                 onPressed: () {
-                                   if (records.isEmpty) {
-                                     ScaffoldMessenger.of(context).showSnackBar(
-                                       SnackBar(
-                                         content: Row(
-                                           children: const [
-                                             Icon(Icons.warning_amber_rounded, color: Colors.amberAccent, size: 20),
-                                             SizedBox(width: 10),
-                                             Expanded(
-                                               child: Text(
-                                                 'No students scanned yet to export.',
-                                                 style: TextStyle(fontWeight: FontWeight.w600),
-                                               ),
-                                             ),
-                                           ],
-                                         ),
-                                         backgroundColor: const Color(0xFF23242A),
-                                         behavior: SnackBarBehavior.floating,
-                                         duration: const Duration(seconds: 3),
-                                       ),
-                                     );
-                                     return;
-                                   }
-                                   showAttendanceExportDialog(
-                                     context: context,
-                                     records: records,
-                                     companyName: widget.drive.companyName,
-                                     roleTitle: widget.drive.roleTitle,
-                                   );
-                                 },
-                                 icon: Icon(Icons.file_download_rounded,
-                                     size: 16, color: accent),
-                                 label: Text('Export',
-                                     style: TextStyle(
-                                         color: accent,
-                                         fontWeight: FontWeight.w600)),
-                               ),
+                              const SizedBox(width: 8),
+                              IconButton.outlined(
+                                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                                onPressed: () {
+                                  AppHaptics.lightImpact();
+                                  ref.invalidate(driveAttendanceProvider(widget.drive.id));
+                                },
+                                icon: Icon(Icons.refresh_rounded, size: 18, color: accent),
+                                style: IconButton.styleFrom(
+                                  side: BorderSide(color: accent.withValues(alpha: 0.3)),
+                                  padding: const EdgeInsets.all(8),
+                                ),
+                                tooltip: 'Refresh Attendance',
+                              ),
+                              const SizedBox(width: 6),
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  side: BorderSide(color: accent.withValues(alpha: 0.3)),
+                                ),
+                                onPressed: () {
+                                  if (records.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Row(
+                                          children: const [
+                                            Icon(Icons.warning_amber_rounded, color: Colors.amberAccent, size: 20),
+                                            SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                'No students scanned yet to export.',
+                                                style: TextStyle(fontWeight: FontWeight.w600),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        backgroundColor: const Color(0xFF23242A),
+                                        behavior: SnackBarBehavior.floating,
+                                        duration: const Duration(seconds: 3),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  showAttendanceExportDialog(
+                                    context: context,
+                                    records: records,
+                                    companyName: widget.drive.companyName,
+                                    roleTitle: widget.drive.roleTitle,
+                                  );
+                                },
+                                icon: Icon(Icons.file_download_rounded, size: 16, color: accent),
+                                label: Text(
+                                  'Export',
+                                  style: TextStyle(color: accent, fontWeight: FontWeight.w600),
+                                ),
+                              ),
                             ],
                           ),
                         ),

@@ -33,9 +33,55 @@ import '../../features/tpo/presentation/screens/drive_creation_wizard.dart';
 import '../../features/tpo/presentation/screens/applicant_list_screen.dart';
 import '../../features/tpo/presentation/screens/round_management_screen.dart';
 import '../../features/tpo/presentation/screens/student_progress_screen.dart';
+import '../theme/app_motion.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
 final rootNavigatorKey = _rootKey;
+
+/// Smooth, high-performance page route transition helper matching global motion tokens.
+Page<dynamic> buildAppPageTransition({
+  required BuildContext context,
+  required GoRouterState state,
+  required Widget child,
+}) {
+  if (AppMotion.isReducedMotion(context)) {
+    return NoTransitionPage(key: state.pageKey, child: child);
+  }
+
+  return CustomTransitionPage(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: AppMotion.page,
+    reverseTransitionDuration: AppMotion.fast,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(parent: animation, curve: AppMotion.emphasizedEasing),
+      );
+
+      final translationAnimation = Tween<Offset>(
+        begin: const Offset(0.0, 0.012),
+        end: Offset.zero,
+      ).animate(
+        CurvedAnimation(parent: animation, curve: AppMotion.emphasizedEasing),
+      );
+
+      final scaleAnimation = Tween<double>(begin: 0.985, end: 1.0).animate(
+        CurvedAnimation(parent: animation, curve: AppMotion.emphasizedEasing),
+      );
+
+      return FadeTransition(
+        opacity: opacityAnimation,
+        child: SlideTransition(
+          position: translationAnimation,
+          child: ScaleTransition(
+            scale: scaleAnimation,
+            child: child,
+          ),
+        ),
+      );
+    },
+  );
+}
 
 /// Global dashboard tab providers
 final studentDashboardTabProvider = StateProvider<int>((ref) => 0);
@@ -127,11 +173,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return _dashboardPath(profile.role);
         }
 
-        // Enforce strict role-based route authorization
+        // Enforce strict role-based route authorization for Faculty approval
         if (profile.role == UserRole.faculty &&
-            state.matchedLocation.startsWith('/faculty') &&
-            state.matchedLocation != '/faculty/waiting') {
-          return '/faculty/waiting';
+            profile.approvalStatus != ApprovalStatus.approved) {
+          if (state.matchedLocation != '/faculty/waiting') {
+            return '/faculty/waiting';
+          }
+          return null; // Already on faculty waiting screen
         }
 
         // If they are on pending-approval but are approved, redirect to dashboard
@@ -157,193 +205,325 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/splash',
         name: 'splash',
-        builder: (_, __) => const SplashScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const SplashScreen(),
+        ),
       ),
       GoRoute(
         path: '/login',
         name: 'login',
-        builder: (_, __) => const LoginScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const LoginScreen(),
+        ),
       ),
       GoRoute(
         path: '/signup',
         name: 'signup',
-        builder: (_, __) => const SignupScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const SignupScreen(),
+        ),
       ),
       GoRoute(
         path: '/verify-otp',
         name: 'verify-otp',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final email = state.extra as String? ?? '';
-          return OtpVerificationScreen(email: email);
+          return buildAppPageTransition(
+            context: context,
+            state: state,
+            child: OtpVerificationScreen(email: email),
+          );
         },
       ),
       GoRoute(
         path: '/forgot-password',
         name: 'forgot-password',
-        builder: (_, __) => const ForgotPasswordScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const ForgotPasswordScreen(),
+        ),
       ),
       GoRoute(
         path: '/pending-approval',
         name: 'pending-approval',
-        builder: (_, __) => const PendingApprovalScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const PendingApprovalScreen(),
+        ),
       ),
       GoRoute(
         path: '/onboarding',
         name: 'onboarding',
-        builder: (_, __) => const ProfileSetupScreen(isEditMode: false),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const ProfileSetupScreen(isEditMode: false),
+        ),
       ),
       // ── Student routes ──────────────────────────────────────────────────
       GoRoute(
         path: '/student',
         name: 'student',
-        builder: (_, __) => const StudentDashboardScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const StudentDashboardScreen(),
+        ),
         routes: [
           GoRoute(
             path: 'onboarding',
             name: 'student-onboarding-nested',
-            builder: (_, __) => const ProfileSetupScreen(isEditMode: false),
+            pageBuilder: (context, state) => buildAppPageTransition(
+              context: context,
+              state: state,
+              child: const ProfileSetupScreen(isEditMode: false),
+            ),
           ),
         ],
       ),
       GoRoute(
         path: '/student/onboarding',
         name: 'student-onboarding',
-        builder: (_, __) => const ProfileSetupScreen(isEditMode: false),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const ProfileSetupScreen(isEditMode: false),
+        ),
       ),
       GoRoute(
         path: '/student/profile-edit',
         name: 'student-profile-edit',
-        builder: (context, state) => ProfileSetupScreen(
-          isEditMode: true,
-          initialStep: state.extra as int? ?? 0,
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: ProfileSetupScreen(
+            isEditMode: true,
+            initialStep: state.extra as int? ?? 0,
+          ),
         ),
       ),
       GoRoute(
         path: '/student/consent-form',
         name: 'student-consent-form',
-        builder: (_, __) => const ConsentFormScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const ConsentFormScreen(),
+        ),
       ),
       GoRoute(
         path: '/student/eligible-drives',
         name: 'student-eligible-drives',
-        builder: (_, __) => const EligibleDrivesScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const EligibleDrivesScreen(),
+        ),
       ),
       GoRoute(
         path: '/student/drive-details',
         name: 'student-drive-details',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final drive = state.extra as Drive;
-          return DriveDetailsScreen(drive: drive);
+          return buildAppPageTransition(
+            context: context,
+            state: state,
+            child: DriveDetailsScreen(drive: drive),
+          );
         },
       ),
       GoRoute(
         path: '/student/scan-attendance',
         name: 'student-scan-attendance',
-        builder: (_, __) => const ScanAttendanceScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const ScanAttendanceScreen(),
+        ),
       ),
       GoRoute(
         path: '/student/timeline',
         name: 'student-timeline',
-        builder: (_, __) => const StudentApplicationTimelineScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const StudentApplicationTimelineScreen(),
+        ),
       ),
       // ── Faculty routes ──────────────────────────────────────────────────
       GoRoute(
         path: '/faculty',
         name: 'faculty',
-        builder: (_, __) => const FacultyDashboardScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const FacultyDashboardScreen(),
+        ),
       ),
       GoRoute(
         path: '/faculty/approval-queue',
         name: 'faculty-approval-queue',
-        builder: (_, __) => const StudentApprovalQueueScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const StudentApprovalQueueScreen(),
+        ),
       ),
       GoRoute(
         path: '/faculty/waiting',
         name: 'faculty-waiting',
-        builder: (_, __) => const FacultyWaitingScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const FacultyWaitingScreen(),
+        ),
       ),
       GoRoute(
         path: '/faculty/analytics',
         name: 'faculty-analytics',
-        builder: (_, state) {
+        pageBuilder: (context, state) {
           final department = state.uri.queryParameters['dept'] ?? '';
-          return DepartmentAnalyticsScreen(department: department);
+          return buildAppPageTransition(
+            context: context,
+            state: state,
+            child: DepartmentAnalyticsScreen(department: department),
+          );
         },
       ),
       // ── Admin routes ────────────────────────────────────────────────────
       GoRoute(
         path: '/admin',
         name: 'admin',
-        builder: (_, __) => const AdminDashboardScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const AdminDashboardScreen(),
+        ),
       ),
       GoRoute(
         path: '/admin/reports',
         name: 'admin-reports',
-        builder: (_, __) => const AdminReportsScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const AdminReportsScreen(),
+        ),
       ),
       GoRoute(
         path: '/admin/appoint-tpo',
         name: 'admin-appoint-tpo',
-        builder: (_, __) => const TpoAppointmentScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const TpoAppointmentScreen(),
+        ),
       ),
       GoRoute(
         path: '/admin/appoint-fc',
         name: 'admin-appoint-fc',
-        builder: (_, __) => const AppointFacultyCoordinatorScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const AppointFacultyCoordinatorScreen(),
+        ),
       ),
       GoRoute(
         path: '/admin/audit-logs',
         name: 'admin-audit-logs',
-        builder: (_, __) => const AuditLogsScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const AuditLogsScreen(),
+        ),
       ),
       GoRoute(
         path: '/admin/settings',
         name: 'admin-settings',
-        builder: (_, __) => const SystemSettingsScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const SystemSettingsScreen(),
+        ),
       ),
       GoRoute(
         path: '/admin/courses',
         name: 'admin-courses',
-        builder: (_, __) => const CourseManagementScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const CourseManagementScreen(),
+        ),
       ),
       // ── TPO routes ──────────────────────────────────────────────────────
       GoRoute(
         path: '/tpo',
         name: 'tpo',
-        builder: (_, __) => const TpoDashboardScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const TpoDashboardScreen(),
+        ),
       ),
       GoRoute(
         path: '/tpo/create-drive',
         name: 'tpo-create-drive',
-        builder: (_, __) => const DriveCreationWizard(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const DriveCreationWizard(),
+        ),
       ),
       GoRoute(
         path: '/tpo/applicant-list',
         name: 'tpo-applicant-list',
-        builder: (_, __) => const ApplicantListScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const ApplicantListScreen(),
+        ),
       ),
       GoRoute(
         path: '/tpo/appoint-faculty',
         name: 'tpo-appoint-faculty',
-        builder: (_, __) => const AppointFacultyCoordinatorScreen(),
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const AppointFacultyCoordinatorScreen(),
+        ),
       ),
       GoRoute(
         path: '/tpo/round-management',
         name: 'tpo-round-management',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final drive = state.extra as Drive;
-          return RoundManagementScreen(drive: drive);
+          return buildAppPageTransition(
+            context: context,
+            state: state,
+            child: RoundManagementScreen(drive: drive),
+          );
         },
       ),
       GoRoute(
         path: '/tpo/student-progress',
         name: 'tpo-student-progress',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final extra = state.extra as Map<String, dynamic>;
-          return StudentProgressScreen(
-            drive: extra['drive'] as Drive,
-            applicationId: extra['applicationId'] as String,
-            studentName: extra['studentName'] as String,
+          return buildAppPageTransition(
+            context: context,
+            state: state,
+            child: StudentProgressScreen(
+              drive: extra['drive'] as Drive,
+              applicationId: extra['applicationId'] as String,
+              studentName: extra['studentName'] as String,
+            ),
           );
         },
       ),

@@ -17,6 +17,8 @@ import '../providers/student_drive_provider.dart';
 import '../../domain/entities/application.dart';
 import '../../domain/entities/drive.dart';
 import 'student_application_timeline_screen.dart';
+import '../providers/student_timeline_provider.dart';
+import '../../../../shared/presentation/widgets/app_refresh_indicator.dart';
 
 class StudentDashboardScreen extends ConsumerStatefulWidget {
   const StudentDashboardScreen({super.key});
@@ -26,23 +28,45 @@ class StudentDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen> {
-
-
-  static const _navDestinations = [
-    NavDestinationItem(icon: Icons.home_rounded, label: 'Home'),
-    NavDestinationItem(icon: Icons.work_rounded, label: 'Drives'),
-    NavDestinationItem(icon: Icons.timeline_rounded, label: 'Timeline'),
-    NavDestinationItem(icon: Icons.person_rounded, label: 'Profile'),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final currentNavIndex = ref.watch(studentDashboardTabProvider);
     final profileAsync = ref.watch(authNotifierProvider);
+    final notificationsAsync = ref.watch(studentNotificationsProvider);
     final theme = Theme.of(context);
     final brandTheme = theme.extension<AppBrandTheme>()!;
 
     final profile = profileAsync.valueOrNull;
+
+    final unreadCount = notificationsAsync.valueOrNull
+            ?.where((n) => n['read'] == false || n['read'] == null)
+            .length ??
+        0;
+
+    final navDestinations = [
+      const NavDestinationItem(
+        icon: Icons.home_outlined,
+        selectedIcon: Icons.home_rounded,
+        label: 'Home',
+      ),
+      const NavDestinationItem(
+        icon: Icons.work_outline_rounded,
+        selectedIcon: Icons.work_rounded,
+        label: 'Drives',
+      ),
+      NavDestinationItem(
+        icon: Icons.timeline_rounded,
+        selectedIcon: Icons.timeline_rounded,
+        label: 'Timeline',
+        hasBadge: unreadCount > 0,
+        badgeCount: unreadCount,
+      ),
+      const NavDestinationItem(
+        icon: Icons.person_outline_rounded,
+        selectedIcon: Icons.person_rounded,
+        label: 'Profile',
+      ),
+    ];
 
     return PopScope(
       canPop: currentNavIndex == 0,
@@ -65,7 +89,7 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
             FloatingPillNavBar(
               selectedIndex: currentNavIndex,
               onDestinationSelected: (index) => ref.read(studentDashboardTabProvider.notifier).state = index,
-              items: _navDestinations,
+              items: navDestinations,
             ),
           ],
         ),
@@ -96,15 +120,24 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
     final appliedIds = ref.watch(studentAppliedDriveIdsProvider);
     final topPadding = MediaQuery.of(context).padding.top + AppSpacing.sp3;
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.only(
-        top: topPadding,
-        left: AppSpacing.sp5,
-        right: AppSpacing.sp5,
-        bottom: 110,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return AppRefreshIndicator(
+      onRefresh: () async {
+        await Future.wait([
+          ref.refresh(studentApplicationsProvider.future),
+          ref.refresh(studentEligibleDrivesProvider.future),
+        ]);
+        ref.invalidate(studentAppliedDriveIdsProvider);
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(
+          top: topPadding,
+          left: AppSpacing.sp5,
+          right: AppSpacing.sp5,
+          bottom: 110,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Greeting & User Header
           Row(
@@ -368,8 +401,9 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildRecentActivity(List<Application> apps, AppBrandTheme brandTheme, ThemeData theme) {
     if (apps.isEmpty) {

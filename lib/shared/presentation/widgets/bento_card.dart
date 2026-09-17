@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../core/theme/app_motion.dart';
 
 /// BentoCard providing scale-on-press micro-interaction and tactile feedback.
 class BentoCard extends StatefulWidget {
@@ -17,7 +18,7 @@ class BentoCard extends StatefulWidget {
     this.shape,
     this.color,
     this.padding,
-    this.scaleFactor = 0.97,
+    this.scaleFactor = 0.98,
   });
 
   @override
@@ -33,10 +34,10 @@ class _BentoCardState extends State<BentoCard> with SingleTickerProviderStateMix
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 120),
+      duration: AppMotion.fast,
     );
     _scaleAnimation = Tween<double>(begin: 1.0, end: widget.scaleFactor).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+      CurvedAnimation(parent: _controller, curve: AppMotion.easeOutCubic),
     );
   }
 
@@ -72,6 +73,19 @@ class _BentoCardState extends State<BentoCard> with SingleTickerProviderStateMix
       child: widget.child,
     );
 
+    if (widget.onTap == null || AppMotion.isReducedMotion(context)) {
+      return GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          decoration: ShapeDecoration(
+            color: widget.color ?? Theme.of(context).colorScheme.surface,
+            shape: widget.shape ?? const RoundedRectangleBorder(),
+          ),
+          child: content,
+        ),
+      );
+    }
+
     return GestureDetector(
       onTapDown: _onTapDown,
       onTapUp: _onTapUp,
@@ -94,3 +108,4 @@ class _BentoCardState extends State<BentoCard> with SingleTickerProviderStateMix
     );
   }
 }
+

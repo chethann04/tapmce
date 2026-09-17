@@ -7,6 +7,7 @@ import '../../../../core/theme/theme_extensions.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/file_name_extractor.dart';
 import '../providers/student_timeline_provider.dart';
+import '../../../../shared/presentation/widgets/app_refresh_indicator.dart';
 
 /// Unhidden, Beautifully Rearranged & Readable Application Tracker
 class StudentApplicationTimelineScreen extends ConsumerWidget {
@@ -36,42 +37,58 @@ class StudentApplicationTimelineScreen extends ConsumerWidget {
           if (applications.isEmpty) {
             return _emptyState(context, theme, brandTheme, topPadding);
           }
-          return CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    top: topPadding + AppSpacing.sp4,
-                    left: AppSpacing.sp5,
-                    right: AppSpacing.sp5,
+          return AppRefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(studentTimelineProvider);
+              await ref.read(studentTimelineProvider.future);
+            },
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      top: topPadding + AppSpacing.sp4,
+                      left: AppSpacing.sp5,
+                      right: AppSpacing.sp5,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'MY APPLICATIONS',
+                          style: GoogleFonts.ibmPlexMono(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.08,
+                            color: brandTheme.textMuted,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Live Recruitment Progress',
+                          style: GoogleFonts.fraunces(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Application Tracker',
-                        style: GoogleFonts.fraunces(fontSize: 24, fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Structured recruitment journey and stage progress',
-                        style: GoogleFonts.inter(fontSize: 13, color: brandTheme.textMuted),
-                      ),
-                    ],
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.sp5, AppSpacing.sp4, AppSpacing.sp5, 110,
+                  ),
+                  sliver: SliverList.separated(
+                    itemCount: applications.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sp5),
+                    itemBuilder: (_, i) => _StructuredApplicationCard(data: applications[i]),
                   ),
                 ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.sp5, AppSpacing.sp4, AppSpacing.sp5, 110,
-                ),
-                sliver: SliverList.separated(
-                  itemCount: applications.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sp5),
-                  itemBuilder: (_, i) => _StructuredApplicationCard(data: applications[i]),
-                ),
-              ),
-            ],
+              ],
+            ),
           );
         },
         loading: () => Center(

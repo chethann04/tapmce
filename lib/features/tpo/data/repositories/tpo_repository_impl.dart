@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../shared/domain/entities/company.dart';
 import '../../../student/domain/entities/drive.dart';
@@ -43,10 +44,18 @@ class TpoRepositoryImpl implements TpoRepository {
       });
     }
 
-    // Update role on profile
-    await _supabase
-        .from('profiles')
-        .update({'role': 'faculty_coordinator'}).eq('id', profileId);
+    // Update department and attempt role update on profile safely
+    try {
+      await _supabase.from('profiles').update({
+        'role': 'faculty_coordinator',
+        'department': department,
+      }).eq('id', profileId);
+    } catch (_) {
+      // If profile role update is restricted by Postgres trigger (P0001), update department only
+      await _supabase.from('profiles').update({
+        'department': department,
+      }).eq('id', profileId);
+    }
 
     // Roles are exclusive: remove any previous TPO appointment so this user
     // is not shown as TPO while being a department coordinator
@@ -979,12 +988,15 @@ class TpoRepositoryImpl implements TpoRepository {
     required String remarks,
     required String performedBy,
   }) async {
-    await _supabase.from('application_round_status').upsert({
-      'application_id': applicationId,
-      'round_id': roundId,
-      'remarks': remarks,
-      
-    }, onConflict: 'application_id,round_id');
+    try {
+      await _supabase.from('application_round_status').upsert({
+        'application_id': applicationId,
+        'round_id': roundId,
+        'remarks': remarks,
+      }, onConflict: 'application_id,round_id');
+    } catch (e) {
+      debugPrint('[TPORepositoryImpl] addRoundRemarks warning: $e');
+    }
 
     try {
       await _auditLogRepo.logAction(

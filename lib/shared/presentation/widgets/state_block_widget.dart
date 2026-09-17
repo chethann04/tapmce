@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:placement_connect/core/theme/theme_extensions.dart';
-import 'package:placement_connect/core/theme/app_spacing.dart';
+import '../../../core/theme/theme_extensions.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_motion.dart';
 
 class StateBlockWidget extends StatelessWidget {
   final IconData icon;
@@ -27,6 +28,7 @@ class StateBlockWidget extends StatelessWidget {
 
     final iconBg = isError ? brandTheme.statusRejected.withValues(alpha: 0.12) : brandTheme.surfaceAlt;
     final iconColor = isError ? brandTheme.statusRejected : brandTheme.textMuted;
+    final isReduced = AppMotion.isReducedMotion(context);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(
@@ -37,19 +39,47 @@ class StateBlockWidget extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: iconBg,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Icon(
-              icon,
-              size: 26,
-              color: iconColor,
-            ),
-          ),
+          isReduced
+              ? Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: iconBg,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 26,
+                    color: iconColor,
+                  ),
+                )
+              : TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0.0, end: 1.0),
+                  duration: AppMotion.slow,
+                  curve: AppMotion.emphasizedEasing,
+                  builder: (context, val, child) {
+                    return Transform.translate(
+                      offset: Offset(0, (1.0 - val) * 8.0),
+                      child: Opacity(
+                        opacity: val,
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: iconBg,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Icon(
+                      icon,
+                      size: 26,
+                      color: iconColor,
+                    ),
+                  ),
+                ),
           const SizedBox(height: AppSpacing.sp3),
           Text(
             title,
@@ -99,3 +129,4 @@ class StateBlockWidget extends StatelessWidget {
     );
   }
 }
+

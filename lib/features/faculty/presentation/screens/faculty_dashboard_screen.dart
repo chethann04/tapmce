@@ -13,6 +13,7 @@ import '../../../../shared/presentation/widgets/state_block_widget.dart';
 import '../../../../shared/presentation/widgets/status_thread_widget.dart';
 import '../../../../shared/presentation/widgets/subtle_divider.dart';
 import '../../../../shared/presentation/widgets/app_logo.dart';
+import '../../../../shared/presentation/widgets/app_refresh_indicator.dart';
 import '../../../student/domain/entities/drive.dart';
 import '../../../tpo/presentation/providers/tpo_provider.dart';
 import 'student_approval_queue_screen.dart';
@@ -26,21 +27,40 @@ class FacultyDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _FacultyDashboardScreenState extends ConsumerState<FacultyDashboardScreen> {
-
-
-  static const _navDestinations = [
-    NavDestinationItem(icon: Icons.dashboard_rounded, label: 'Overview'),
-    NavDestinationItem(icon: Icons.verified_user_rounded, label: 'Verify'),
-    NavDestinationItem(icon: Icons.analytics_rounded, label: 'Analytics'),
-    NavDestinationItem(icon: Icons.person_rounded, label: 'Profile'),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final currentNavIndex = ref.watch(facultyDashboardTabProvider);
     final profileAsync = ref.watch(authNotifierProvider);
+    final pendingStudentsAsync = ref.watch(pendingStudentsProvider);
     final theme = Theme.of(context);
     final brandTheme = theme.extension<AppBrandTheme>()!;
+
+    final pendingCount = pendingStudentsAsync.valueOrNull?.length ?? 0;
+
+    final navDestinations = [
+      const NavDestinationItem(
+        icon: Icons.dashboard_outlined,
+        selectedIcon: Icons.dashboard_rounded,
+        label: 'Overview',
+      ),
+      NavDestinationItem(
+        icon: Icons.verified_user_outlined,
+        selectedIcon: Icons.verified_user_rounded,
+        label: 'Verify',
+        hasBadge: pendingCount > 0,
+        badgeCount: pendingCount,
+      ),
+      const NavDestinationItem(
+        icon: Icons.analytics_outlined,
+        selectedIcon: Icons.analytics_rounded,
+        label: 'Analytics',
+      ),
+      const NavDestinationItem(
+        icon: Icons.person_outline_rounded,
+        selectedIcon: Icons.person_rounded,
+        label: 'Profile',
+      ),
+    ];
 
     return PopScope(
       canPop: currentNavIndex == 0,
@@ -79,7 +99,7 @@ class _FacultyDashboardScreenState extends ConsumerState<FacultyDashboardScreen>
           FloatingPillNavBar(
             selectedIndex: currentNavIndex,
             onDestinationSelected: (index) => ref.read(facultyDashboardTabProvider.notifier).state = index,
-            items: _navDestinations,
+            items: navDestinations,
           ),
         ],
       ),
@@ -106,15 +126,24 @@ class _FacultyDashboardScreenState extends ConsumerState<FacultyDashboardScreen>
     final pendingStudentsAsync = ref.watch(pendingStudentsProvider);
     final topPadding = MediaQuery.of(context).padding.top + AppSpacing.sp3;
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.only(
-        top: topPadding,
-        left: AppSpacing.sp5,
-        right: AppSpacing.sp5,
-        bottom: 110,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return AppRefreshIndicator(
+      onRefresh: () async {
+        await Future.wait([
+          ref.refresh(pendingStudentsProvider.future),
+          ref.refresh(verifiedStudentsProvider.future),
+          ref.refresh(tpoDrivesProvider.future),
+        ]);
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(
+          top: topPadding,
+          left: AppSpacing.sp5,
+          right: AppSpacing.sp5,
+          bottom: 110,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -382,8 +411,9 @@ class _FacultyDashboardScreenState extends ConsumerState<FacultyDashboardScreen>
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _verificationTab(String facultyName, ThemeData theme, AppBrandTheme brandTheme) {
     return const StudentApprovalQueueScreen();

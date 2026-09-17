@@ -8,6 +8,7 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/faculty_provider.dart';
 import '../../../student/presentation/screens/profile_setup_screen.dart';
 import '../../../../core/theme/theme_extensions.dart';
+import '../../../../shared/presentation/widgets/app_refresh_indicator.dart';
 
 class StudentApprovalQueueScreen extends ConsumerStatefulWidget {
   const StudentApprovalQueueScreen({super.key});
@@ -1046,97 +1047,106 @@ class _StudentApprovalQueueScreenState
             ),
           );
         }
+        return AppRefreshIndicator(
+          onRefresh: () async {
+            await Future.wait([
+              ref.refresh(pendingStudentsProvider.future),
+              ref.refresh(verifiedStudentsProvider.future),
+              ref.refresh(rejectedStudentsProvider.future),
+            ]);
+          },
+          child: ListView.separated(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.only(left: 14, right: 14, top: 10, bottom: 20),
+            itemCount: filteredStudents.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              final student = filteredStudents[index];
+              final isSelected = _selectedStudentIds.contains(student.id);
 
-        return ListView.separated(
-          padding: const EdgeInsets.only(left: 14, right: 14, top: 10, bottom: 20),
-          itemCount: filteredStudents.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
-          itemBuilder: (context, index) {
-            final student = filteredStudents[index];
-            final isSelected = _selectedStudentIds.contains(student.id);
-
-            return InkWell(
-              onTap: () => _showStudentDetailsModal(student, brandTheme, theme, isPending),
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isSelected ? accent.withValues(alpha: 0.08) : theme.colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isSelected
-                        ? accent
-                        : (brandTheme?.cardBorder ?? theme.colorScheme.outline),
-                    width: isSelected ? 1.5 : 1.0,
+              return InkWell(
+                onTap: () => _showStudentDetailsModal(student, brandTheme, theme, isPending),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isSelected ? accent.withValues(alpha: 0.08) : theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isSelected
+                          ? accent
+                          : (brandTheme?.cardBorder ?? theme.colorScheme.outline),
+                      width: isSelected ? 1.5 : 1.0,
+                    ),
                   ),
-                ),
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: Checkbox(
-                        value: isSelected,
-                        activeColor: accent,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                        onChanged: (_) => _toggleStudentSelection(student.id),
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: Checkbox(
+                          value: isSelected,
+                          activeColor: accent,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          onChanged: (_) => _toggleStudentSelection(student.id),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: accent.withValues(alpha: 0.15),
-                      child: Text(
-                        student.name.isNotEmpty ? student.name.split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join().toUpperCase() : 'S',
-                        style: GoogleFonts.ibmPlexMono(fontWeight: FontWeight.bold, color: accent, fontSize: 13),
+                      const SizedBox(width: 8),
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: accent.withValues(alpha: 0.15),
+                        child: Text(
+                          student.name.isNotEmpty ? student.name.split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join().toUpperCase() : 'S',
+                          style: GoogleFonts.ibmPlexMono(fontWeight: FontWeight.bold, color: accent, fontSize: 13),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            student.name,
-                            style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${student.usn ?? 'N/A'}  •  ${student.department ?? 'N/A'}',
-                            style: GoogleFonts.inter(fontSize: 11, color: brandTheme?.textMuted),
-                          ),
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: student.approvalStatus == ApprovalStatus.approved
-                                  ? Colors.green.withValues(alpha: 0.15)
-                                  : student.approvalStatus == ApprovalStatus.rejected
-                                      ? Colors.red.withValues(alpha: 0.15)
-                                      : accent.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(100),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              student.name,
+                              style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14),
                             ),
-                            child: Text(
-                              student.approvalStatus.displayName,
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
+                            const SizedBox(height: 2),
+                            Text(
+                              '${student.usn ?? 'N/A'}  •  ${student.department ?? 'N/A'}',
+                              style: GoogleFonts.inter(fontSize: 11, color: brandTheme?.textMuted),
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
                                 color: student.approvalStatus == ApprovalStatus.approved
-                                    ? Colors.green
+                                    ? Colors.green.withValues(alpha: 0.15)
                                     : student.approvalStatus == ApprovalStatus.rejected
-                                        ? Colors.red
-                                        : accent,
+                                        ? Colors.red.withValues(alpha: 0.15)
+                                        : accent.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(100),
+                              ),
+                              child: Text(
+                                student.approvalStatus.displayName,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: student.approvalStatus == ApprovalStatus.approved
+                                      ? Colors.green
+                                      : student.approvalStatus == ApprovalStatus.rejected
+                                          ? Colors.red
+                                          : accent,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         );
       },
     );

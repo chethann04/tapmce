@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:placement_connect/core/theme/theme_extensions.dart';
-import 'package:placement_connect/core/theme/app_spacing.dart';
-import 'package:placement_connect/core/theme/app_motion.dart';
+import '../../../core/theme/theme_extensions.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_motion.dart';
 
 class SkeletonLoader extends StatefulWidget {
   final double width;

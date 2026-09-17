@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../../core/theme/theme_extensions.dart';
+import '../../../core/theme/theme_extensions.dart';
 
 class NavItemData {
   final IconData icon;

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/theme/theme_extensions.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../student/domain/entities/drive.dart';
+import '../../domain/entities/drive_round.dart';
 import '../providers/tpo_provider.dart';
 
 class StudentProgressScreen extends ConsumerWidget {
@@ -177,17 +178,20 @@ class StudentProgressScreen extends ConsumerWidget {
         ),
         const SizedBox(height: AppSpacing.sp4),
         ...List.generate(rounds.length, (index) {
-          final round = rounds[index];
-          final roundNumber = round is Map<String, dynamic>
-              ? round['round_number'] as int? ?? (index + 1)
-              : (index + 1);
-          final roundName = round is Map<String, dynamic>
-              ? round['round_name'] as String? ?? 'Round ${index + 1}'
-              : 'Round ${index + 1}';
+          final dynamic roundObj = rounds[index];
+          final String roundId = roundObj is DriveRound
+              ? roundObj.id
+              : (roundObj is Map ? (roundObj['id']?.toString() ?? '') : '');
+          final int roundNumber = roundObj is DriveRound
+              ? roundObj.roundNumber
+              : (roundObj is Map ? (roundObj['round_number'] as int? ?? (index + 1)) : (index + 1));
+          final String roundName = roundObj is DriveRound
+              ? roundObj.roundName
+              : (roundObj is Map ? (roundObj['round_name'] as String? ?? 'Round ${index + 1}') : 'Round ${index + 1}');
 
           // Find progress for this round
           final roundProgress = progress.firstWhere(
-            (p) => p['round_id'] == round['id'],
+            (p) => p['round_id'] == roundId,
             orElse: () => <String, dynamic>{},
           );
           final attended = roundProgress['attended'] as bool? ?? false;

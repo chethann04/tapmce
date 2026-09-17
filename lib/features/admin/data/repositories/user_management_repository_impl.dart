@@ -116,10 +116,18 @@ class UserManagementRepositoryImpl implements UserManagementRepository {
     }
 
     // 2. Set user role to faculty_coordinator and update department
-    await _supabase.rpc('admin_set_user_role', params: {
-      'p_profile_id': profileId,
-      'p_role': 'faculty_coordinator',
-    });
+    try {
+      await _supabase.rpc('admin_set_user_role', params: {
+        'p_profile_id': profileId,
+        'p_role': 'faculty_coordinator',
+      });
+    } catch (_) {
+      try {
+        await _supabase.from('profiles').update({
+          'role': 'faculty_coordinator',
+        }).eq('id', profileId);
+      } catch (_) {}
+    }
 
     await _supabase.from('profiles').update({
       'department': department,

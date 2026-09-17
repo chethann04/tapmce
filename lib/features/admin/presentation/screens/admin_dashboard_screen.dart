@@ -8,6 +8,7 @@ import '../../../../core/theme/theme_extensions.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/presentation/widgets/skeleton_loader.dart';
 import '../../../../shared/presentation/widgets/app_logo.dart';
+import '../../../../shared/presentation/widgets/app_refresh_indicator.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
@@ -40,7 +41,7 @@ class AdminDashboardScreen extends ConsumerWidget {
         ],
       ),
       body: profileAsync.when(
-        data: (profile) => _body(context, profile?.fullName ?? 'Admin', brandTheme, theme),
+        data: (profile) => _body(context, ref, profile?.fullName ?? 'Admin', brandTheme, theme),
         loading: () => Padding(
           padding: const EdgeInsets.all(AppSpacing.sp5),
           child: Column(
@@ -55,9 +56,14 @@ class AdminDashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _body(BuildContext context, String name, AppBrandTheme brandTheme, ThemeData theme) => SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.sp5),
-        child: Column(
+  Widget _body(BuildContext context, WidgetRef ref, String name, AppBrandTheme brandTheme, ThemeData theme) => AppRefreshIndicator(
+        onRefresh: () async {
+          await ref.refresh(adminStatsProvider.future);
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(AppSpacing.sp5),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -172,7 +178,8 @@ class AdminDashboardScreen extends ConsumerWidget {
             ),
           ],
         ),
-      );
+      ),
+    );
 
   Widget _statCard(String num, String label, ThemeData theme, AppBrandTheme brandTheme) => Container(
         padding: const EdgeInsets.all(AppSpacing.sp4),

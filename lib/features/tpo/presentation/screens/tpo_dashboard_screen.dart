@@ -14,6 +14,7 @@ import '../../../../shared/presentation/widgets/state_block_widget.dart';
 import '../../../../shared/presentation/widgets/status_thread_widget.dart';
 import '../../../../shared/presentation/widgets/subtle_divider.dart';
 import '../../../../shared/presentation/widgets/app_logo.dart';
+import '../../../../shared/presentation/widgets/app_refresh_indicator.dart';
 import '../widgets/drive_qr_code_modal.dart';
 import 'drive_creation_wizard.dart';
 
@@ -25,21 +26,35 @@ class TpoDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
-
-
-  static const _navDestinations = [
-    NavDestinationItem(icon: Icons.dashboard_rounded, label: 'Overview'),
-    NavDestinationItem(icon: Icons.business_center_rounded, label: 'Drives'),
-    NavDestinationItem(icon: Icons.person_add_alt_rounded, label: 'Faculty'),
-    NavDestinationItem(icon: Icons.assignment_turned_in_rounded, label: 'Offers'),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final currentNavIndex = ref.watch(tpoDashboardTabProvider);
     final profileAsync = ref.watch(authNotifierProvider);
     final theme = Theme.of(context);
     final brandTheme = theme.extension<AppBrandTheme>()!;
+
+    final navDestinations = [
+      const NavDestinationItem(
+        icon: Icons.dashboard_outlined,
+        selectedIcon: Icons.dashboard_rounded,
+        label: 'Overview',
+      ),
+      const NavDestinationItem(
+        icon: Icons.business_center_outlined,
+        selectedIcon: Icons.business_center_rounded,
+        label: 'Drives',
+      ),
+      const NavDestinationItem(
+        icon: Icons.person_add_alt_outlined,
+        selectedIcon: Icons.person_add_alt_rounded,
+        label: 'Faculty',
+      ),
+      const NavDestinationItem(
+        icon: Icons.assignment_turned_in_outlined,
+        selectedIcon: Icons.assignment_turned_in_rounded,
+        label: 'Offers',
+      ),
+    ];
 
     return PopScope(
       canPop: currentNavIndex == 0,
@@ -50,106 +65,106 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
         }
       },
       child: Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: profileAsync.when(
-              data: (profile) => _buildTabContent(currentNavIndex, profile?.fullName ?? 'TPO Officer', brandTheme, theme),
-              loading: () => Padding(
-                padding: const EdgeInsets.only(top: 80, left: 16, right: 16),
-                child: Column(
-                  children: const [
-                    SkeletonCardRow(),
-                    SkeletonCardRow(),
-                  ],
-                ),
-              ),
-              error: (e, _) => StateBlockWidget(
-                icon: Icons.error_outline_rounded,
-                title: "Couldn't load dashboard",
-                message: e.toString(),
-                isError: true,
-              ),
-            ),
-          ),
-
-          // Floating FAB thumb ergonomic position (Drive Management Tab Only)
-          if (currentNavIndex == 1)
-            Positioned(
-              right: AppSpacing.sp5,
-              bottom: 104,
-              child: GestureDetector(
-                onTap: () => context.push('/tpo/create-drive'),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  decoration: BoxDecoration(
-                    gradient: brandTheme.brassGradient,
-                    borderRadius: BorderRadius.circular(AppShapes.radiusFab),
-                    boxShadow: brandTheme.shadow2,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add_rounded, color: brandTheme.onBrass, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        'New Drive',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: brandTheme.onBrass,
-                        ),
-                      ),
+        backgroundColor: theme.scaffoldBackgroundColor,
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: profileAsync.when(
+                data: (profile) => _buildTabContent(currentNavIndex, profile?.fullName ?? 'TPO Officer', brandTheme, theme),
+                loading: () => Padding(
+                  padding: const EdgeInsets.only(top: 80, left: 16, right: 16),
+                  child: Column(
+                    children: const [
+                      SkeletonCardRow(),
+                      SkeletonCardRow(),
                     ],
                   ),
                 ),
-              ),
-            ),
-
-          // Floating FAB thumb ergonomic position (Faculty Coordinator Tab Only)
-          if (currentNavIndex == 2)
-            Positioned(
-              right: AppSpacing.sp5,
-              bottom: 104,
-              child: GestureDetector(
-                onTap: () => context.push('/tpo/appoint-faculty'),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  decoration: BoxDecoration(
-                    gradient: brandTheme.brassGradient,
-                    borderRadius: BorderRadius.circular(AppShapes.radiusFab),
-                    boxShadow: brandTheme.shadow2,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.person_add_alt_1_rounded, color: brandTheme.onBrass, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        'New Faculty Coordinator',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: brandTheme.onBrass,
-                        ),
-                      ),
-                    ],
-                  ),
+                error: (e, _) => StateBlockWidget(
+                  icon: Icons.error_outline_rounded,
+                  title: "Couldn't load TPO dashboard",
+                  message: e.toString(),
+                  isError: true,
                 ),
               ),
             ),
 
-          // Floating Pill Nav Bar
-          FloatingPillNavBar(
-            selectedIndex: currentNavIndex,
-            onDestinationSelected: (index) => ref.read(tpoDashboardTabProvider.notifier).state = index,
-            items: _navDestinations,
-          ),
-        ],
+            // Floating FAB thumb ergonomic position (Drive Management Tab Only)
+            if (currentNavIndex == 1)
+              Positioned(
+                right: AppSpacing.sp5,
+                bottom: 104,
+                child: GestureDetector(
+                  onTap: () => context.push('/tpo/create-drive'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    decoration: BoxDecoration(
+                      gradient: brandTheme.brassGradient,
+                      borderRadius: BorderRadius.circular(AppShapes.radiusFab),
+                      boxShadow: brandTheme.shadow2,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add_rounded, color: brandTheme.onBrass, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'New Drive',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: brandTheme.onBrass,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+            // Floating FAB thumb ergonomic position (Faculty Coordinator Tab Only)
+            if (currentNavIndex == 2)
+              Positioned(
+                right: AppSpacing.sp5,
+                bottom: 104,
+                child: GestureDetector(
+                  onTap: () => context.push('/tpo/appoint-faculty'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    decoration: BoxDecoration(
+                      gradient: brandTheme.brassGradient,
+                      borderRadius: BorderRadius.circular(AppShapes.radiusFab),
+                      boxShadow: brandTheme.shadow2,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.person_add_alt_1_rounded, color: brandTheme.onBrass, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'New Faculty Coordinator',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: brandTheme.onBrass,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+            // Floating Pill Nav Bar
+            FloatingPillNavBar(
+              selectedIndex: currentNavIndex,
+              onDestinationSelected: (index) => ref.read(tpoDashboardTabProvider.notifier).state = index,
+              items: navDestinations,
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
   }
 
   Widget _buildTabContent(int tabIndex, String name, AppBrandTheme brandTheme, ThemeData theme) {
@@ -173,15 +188,24 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
     final offersAsync = ref.watch(tpoOffersCountProvider);
     final topPadding = MediaQuery.of(context).padding.top + AppSpacing.sp3;
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.only(
-        top: topPadding,
-        left: AppSpacing.sp5,
-        right: AppSpacing.sp5,
-        bottom: 170,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return AppRefreshIndicator(
+      onRefresh: () async {
+        await Future.wait([
+          ref.refresh(tpoDrivesProvider.future),
+          ref.refresh(tpoApplicantCountProvider.future),
+          ref.refresh(tpoOffersCountProvider.future),
+        ]);
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(
+          top: topPadding,
+          left: AppSpacing.sp5,
+          right: AppSpacing.sp5,
+          bottom: 170,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -426,23 +450,32 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _drivesManagementTab(WidgetRef ref, AppBrandTheme brandTheme, ThemeData theme) {
     final drivesAsync = ref.watch(tpoDrivesProvider);
     final applicantCountsAsync = ref.watch(tpoDriveApplicantCountsProvider);
     final applicantCounts = applicantCountsAsync.valueOrNull ?? {};
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + AppSpacing.sp4,
-        left: AppSpacing.sp5,
-        right: AppSpacing.sp5,
-        bottom: 170,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return AppRefreshIndicator(
+      onRefresh: () async {
+        await Future.wait([
+          ref.refresh(tpoDrivesProvider.future),
+          ref.refresh(tpoDriveApplicantCountsProvider.future),
+        ]);
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(
+          top: MediaQuery.of(context).padding.top + AppSpacing.sp4,
+          left: AppSpacing.sp5,
+          right: AppSpacing.sp5,
+          bottom: 170,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Drive Management', style: GoogleFonts.fraunces(fontSize: 24, fontWeight: FontWeight.w600)),
           const SizedBox(height: AppSpacing.sp4),
@@ -721,8 +754,9 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _appointFacultyTab(WidgetRef ref, AppBrandTheme brandTheme, ThemeData theme) {
     final coordinatorsAsync = ref.watch(facultyCoordinatorsProvider);
@@ -1375,6 +1409,7 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
   }
 
   void _showApplicantsSheet(Drive drive, AppBrandTheme brandTheme, ThemeData theme) {
+    String searchQuery = '';
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1385,206 +1420,268 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
       builder: (ctx) => Consumer(
         builder: (context, ref, _) {
           final applicantsAsync = ref.watch(tpoDriveApplicantsProvider(drive.id));
-          return DraggableScrollableSheet(
-            initialChildSize: 0.7,
-            minChildSize: 0.4,
-            maxChildSize: 0.9,
-            expand: false,
-            builder: (ctx, scrollController) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 12),
-              Center(
-                child: Container(
-                  width: 40, height: 4,
-                  decoration: BoxDecoration(
-                    color: brandTheme.textMuted.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Applicants',
-                          style: GoogleFonts.fraunces(fontSize: 20, fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${drive.companyName} — ${drive.roleTitle}',
-                          style: GoogleFonts.inter(fontSize: 13, color: brandTheme.textMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    icon: Icon(Icons.close_rounded, color: brandTheme.textMuted),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: applicantsAsync.when(
-                  data: (applicants) {
-                    if (applicants.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.people_outline_rounded, size: 40, color: brandTheme.textMuted),
-                            const SizedBox(height: 12),
-                            Text('No applications yet', style: GoogleFonts.inter(fontSize: 14, color: brandTheme.textMuted)),
-                          ],
-                        ),
-                      );
-                    }
-                    return ListView.separated(
-                      controller: scrollController,
-                      itemCount: applicants.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (_, i) {
-                        final app = applicants[i];
-                        final student = app['student'] as Map<String, dynamic>? ?? {};
-                        final name = student['name'] as String? ?? 'Student';
-                        final usn = student['usn'] as String? ?? '';
-                        final dept = student['department'] as String? ?? '';
-                        final cgpa = student['cgpa'];
-                        final status = app['status'] as String? ?? 'applied';
-                        final appliedAt = app['applied_at'] as String?;
-                        final dateStr = appliedAt != null
-                            ? DateTime.tryParse(appliedAt)?.toIso8601String().split('T').first ?? ''
-                            : '';
-
-                        Color statusBg;
-                        Color statusText;
-                        switch (status) {
-                          case 'shortlisted':
-                            statusBg = Colors.greenAccent.withValues(alpha: 0.15);
-                            statusText = Colors.greenAccent;
-                            break;
-                          case 'rejected':
-                            statusBg = Colors.redAccent.withValues(alpha: 0.15);
-                            statusText = Colors.redAccent;
-                            break;
-                          case 'selected':
-                            statusBg = Colors.amberAccent.withValues(alpha: 0.15);
-                            statusText = Colors.amberAccent;
-                            break;
-                          default:
-                            statusBg = brandTheme.brassSoft;
-                            statusText = brandTheme.brassPrimary;
-                        }
-
-                        return Container(
-                          padding: const EdgeInsets.all(12),
+          return StatefulBuilder(
+            builder: (ctx, setModalState) {
+              return DraggableScrollableSheet(
+                initialChildSize: 0.75,
+                minChildSize: 0.4,
+                maxChildSize: 0.9,
+                expand: false,
+                builder: (ctx, scrollController) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 12),
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.surface,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: brandTheme.cardBorder),
+                            color: brandTheme.textMuted.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(2),
                           ),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 18,
-                                backgroundColor: brandTheme.brassSoft,
-                                child: Text(
-                                  name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
-                                  style: GoogleFonts.fraunces(fontSize: 14, fontWeight: FontWeight.w600, color: brandTheme.brassPrimary),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Applicants',
+                                  style: GoogleFonts.fraunces(fontSize: 20, fontWeight: FontWeight.w600),
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${drive.companyName} — ${drive.roleTitle}',
+                                  style: GoogleFonts.inter(fontSize: 13, color: brandTheme.textMuted),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            icon: Icon(Icons.close_rounded, color: brandTheme.textMuted),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // ── Search Input Bar ─────────────────────────────────
+                      Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: brandTheme.cardBorder),
+                        ),
+                        child: TextField(
+                          onChanged: (val) {
+                            setModalState(() {
+                              searchQuery = val;
+                            });
+                          },
+                          style: GoogleFonts.inter(fontSize: 13, color: theme.colorScheme.onSurface),
+                          decoration: InputDecoration(
+                            hintText: 'Search applicants by name, USN, department...',
+                            hintStyle: GoogleFonts.inter(fontSize: 13, color: brandTheme.textMuted),
+                            prefixIcon: Icon(Icons.search_rounded, size: 18, color: brandTheme.textMuted),
+                            suffixIcon: searchQuery.isNotEmpty
+                                ? IconButton(
+                                    icon: Icon(Icons.close_rounded, size: 16, color: brandTheme.textMuted),
+                                    onPressed: () {
+                                      setModalState(() {
+                                        searchQuery = '';
+                                      });
+                                    },
+                                  )
+                                : null,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: applicantsAsync.when(
+                          data: (applicants) {
+                            if (applicants.isEmpty) {
+                              return Center(
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text(name, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
-                                    const SizedBox(height: 2),
+                                    Icon(Icons.people_outline_rounded, size: 40, color: brandTheme.textMuted),
+                                    const SizedBox(height: 12),
+                                    Text('No applications yet', style: GoogleFonts.inter(fontSize: 14, color: brandTheme.textMuted)),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            final query = searchQuery.trim().toLowerCase();
+                            final filtered = applicants.where((app) {
+                              if (query.isEmpty) return true;
+                              final student = app['student'] as Map<String, dynamic>? ?? {};
+                              final name = (student['name'] as String? ?? '').toLowerCase();
+                              final usn = (student['usn'] as String? ?? '').toLowerCase();
+                              final dept = (student['department'] as String? ?? '').toLowerCase();
+                              final status = (app['status'] as String? ?? '').toLowerCase();
+                              return name.contains(query) || usn.contains(query) || dept.contains(query) || status.contains(query);
+                            }).toList();
+
+                            if (filtered.isEmpty) {
+                              return Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.search_off_rounded, size: 36, color: brandTheme.textMuted),
+                                    const SizedBox(height: 8),
                                     Text(
-                                      [if (usn.isNotEmpty) usn, if (dept.isNotEmpty) dept].join(' · '),
-                                      style: GoogleFonts.inter(fontSize: 12, color: brandTheme.textMuted),
+                                      'No matching applicants found',
+                                      style: GoogleFonts.inter(fontSize: 13, color: brandTheme.textMuted),
                                     ),
-                                    if (cgpa != null) ...[
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'CGPA: ${cgpa is num ? cgpa.toStringAsFixed(2) : cgpa}',
-                                        style: GoogleFonts.ibmPlexMono(fontSize: 11, color: brandTheme.brassPrimary),
-                                      ),
-                                    ],
                                   ],
                                 ),
-                              ),
-                              Flexible(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              );
+                            }
+
+                            return ListView.separated(
+                              controller: scrollController,
+                              itemCount: filtered.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 8),
+                              itemBuilder: (_, i) {
+                                final app = filtered[i];
+                                final student = app['student'] as Map<String, dynamic>? ?? {};
+                                final name = student['name'] as String? ?? 'Student';
+                                final usn = student['usn'] as String? ?? '';
+                                final dept = student['department'] as String? ?? '';
+                                final cgpa = student['cgpa'];
+                                final status = app['status'] as String? ?? 'applied';
+                                final appliedAt = app['applied_at'] as String?;
+                                final dateStr = appliedAt != null
+                                    ? DateTime.tryParse(appliedAt)?.toIso8601String().split('T').first ?? ''
+                                    : '';
+
+                                Color statusBg;
+                                Color statusText;
+                                switch (status) {
+                                  case 'shortlisted':
+                                    statusBg = Colors.greenAccent.withValues(alpha: 0.15);
+                                    statusText = Colors.greenAccent;
+                                    break;
+                                  case 'rejected':
+                                    statusBg = Colors.redAccent.withValues(alpha: 0.15);
+                                    statusText = Colors.redAccent;
+                                    break;
+                                  case 'selected':
+                                    statusBg = Colors.amberAccent.withValues(alpha: 0.15);
+                                    statusText = Colors.amberAccent;
+                                    break;
+                                  default:
+                                    statusBg = brandTheme.brassSoft;
+                                    statusText = brandTheme.brassPrimary;
+                                }
+
+                                return Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onTap: () {
+                                      Navigator.of(ctx).pop();
+                                      context.push('/tpo/student-progress', extra: {
+                                        'drive': drive,
+                                        'applicationId': app['id'] as String,
+                                        'studentName': name,
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(12),
                                       decoration: BoxDecoration(
-                                        color: statusBg,
-                                        borderRadius: BorderRadius.circular(100),
+                                        color: theme.colorScheme.surface,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: brandTheme.cardBorder),
                                       ),
-                                      child: Text(
-                                        status.toUpperCase(),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: statusText),
+                                      child: Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 18,
+                                            backgroundColor: brandTheme.brassSoft,
+                                            child: Text(
+                                              name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
+                                              style: GoogleFonts.fraunces(fontSize: 14, fontWeight: FontWeight.w600, color: brandTheme.brassPrimary),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(name, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  [if (usn.isNotEmpty) usn, if (dept.isNotEmpty) dept].join(' · '),
+                                                  style: GoogleFonts.inter(fontSize: 12, color: brandTheme.textMuted),
+                                                ),
+                                                if (cgpa != null) ...[
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    'CGPA: ${cgpa is num ? cgpa.toStringAsFixed(2) : cgpa}',
+                                                    style: GoogleFonts.ibmPlexMono(fontSize: 11, color: brandTheme.brassPrimary),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                          Flexible(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: statusBg,
+                                                    borderRadius: BorderRadius.circular(100),
+                                                  ),
+                                                  child: Text(
+                                                    status.toUpperCase(),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: statusText),
+                                                  ),
+                                                ),
+                                                if (dateStr.isNotEmpty) ...[
+                                                  const SizedBox(height: 4),
+                                                  Text(dateStr, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.ibmPlexMono(fontSize: 10, color: brandTheme.textMuted)),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    if (dateStr.isNotEmpty) ...[
-                                      const SizedBox(height: 4),
-                                      Text(dateStr, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.ibmPlexMono(fontSize: 10, color: brandTheme.textMuted)),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              PopupMenuButton<String>(
-                                icon: Icon(Icons.more_vert_rounded, size: 18, color: brandTheme.textMuted),
-                                onSelected: (value) {
-                                  if (value == 'progress') {
-                                    Navigator.of(ctx).pop(); // Close sheet
-                                    context.push('/tpo/student-progress', extra: {
-                                      'drive': drive,
-                                      'applicationId': app['id'] as String,
-                                      'studentName': name,
-                                    });
-                                  }
-                                },
-                                itemBuilder: (_) => [
-                                  PopupMenuItem(
-                                    value: 'progress',
-                                    child: Text('View Progress', style: GoogleFonts.inter(fontSize: 13)),
                                   ),
-                                ],
-                              ),
-                            ],
+                                );
+                              },
+                            );
+                          },
+                          loading: () => const Center(child: CircularProgressIndicator()),
+                          error: (e, _) => Center(
+                            child: Text('Error loading applicants: $e', style: GoogleFonts.inter(fontSize: 13)),
                           ),
-                        );
-                      },
-                    );
-                  },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => Center(
-                    child: Text('Error loading applicants: $e', style: GoogleFonts.inter(fontSize: 13)),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-      );
-    },
-  ),
-);
+              );
+            },
+          );
+        },
+      ),
+    );
   }
 }
 
