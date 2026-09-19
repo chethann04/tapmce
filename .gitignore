@@ -49,3 +49,11 @@ app.*.map.json
 .gradle/
 **/android/.gradle/
 **/supabase/.temp/
+
+# Environment & Secrets
+.env
+.env.*
+*.env
+*service-account*.json
+firebase-adminsdk*.json
+

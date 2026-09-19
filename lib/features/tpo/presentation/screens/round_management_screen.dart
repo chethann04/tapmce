@@ -11,7 +11,6 @@ import '../../../../core/theme/theme_extensions.dart';
 import '../../../../core/services/email_notification_service.dart';
 import '../../../../shared/presentation/widgets/subtle_divider.dart';
 import '../../../student/domain/entities/drive.dart';
-import '../../../student/domain/entities/application.dart';
 import '../../domain/entities/drive_round.dart';
 import '../providers/tpo_provider.dart';
 
@@ -85,6 +84,11 @@ class _RoundManagementScreenState
         foregroundColor: theme.colorScheme.onSurface,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_active_outlined, size: 20),
+            onPressed: () => _sendDeadlineReminder(),
+            tooltip: 'Send Deadline Reminder (Push + Email to Unapplied Students)',
+          ),
           IconButton(
             icon: const Icon(Icons.description_outlined, size: 20),
             onPressed: () => _exportDriveExcelReport(),
@@ -401,7 +405,7 @@ class _RoundManagementScreenState
                 final isActive = _filterStatus == f.$1;
                 final chipColor = f.$4 == Colors.white
                     ? brandTheme.brassPrimary
-                    : f.$4 as Color;
+                    : f.$4;
                 return Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: GestureDetector(
@@ -423,7 +427,7 @@ class _RoundManagementScreenState
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            f.$3 as IconData,
+                            f.$3,
                             size: 12,
                             color: isActive ? chipColor : Colors.white38,
                           ),
@@ -450,7 +454,7 @@ class _RoundManagementScreenState
             padding: const EdgeInsets.only(left: 4, top: 6, bottom: 2),
             child: Row(
               children: [
-                Icon(Icons.info_outline_rounded, size: 11, color: Colors.white24),
+                const Icon(Icons.info_outline_rounded, size: 11, color: Colors.white24),
                 const SizedBox(width: 4),
                 Text(
                   activeFilter.$5,
@@ -587,7 +591,6 @@ class _RoundManagementScreenState
     final isSelected = _selectedAppIds.contains(appId);
     final status = app['status'] as String? ?? 'applied';
     final roundResult = app['round_result'] as String? ?? 'pending'; // per-stage result
-    final attendanceStatus = app['attendance_status'] as String?;
     final appCurrentRound = app['current_round'] as int? ?? 1;
 
     // Status badge — reflect the per-stage outcome, not the global app status
@@ -880,7 +883,6 @@ class _RoundManagementScreenState
           bool isCompleted = false;
           bool isCurrent = false;
           bool isStageRejected = false;
-          bool isPending = false;
 
           if (isOfferStage) {
             // Offer node is completed only if student is offered/selected
@@ -889,13 +891,17 @@ class _RoundManagementScreenState
             // All rounds completed if offered
             isCompleted = true;
           } else if (isRejected) {
-            if (stageNum < appCurrentRound) isCompleted = true;
-            else if (stageNum == appCurrentRound) isStageRejected = true;
-            else isPending = true;
+            if (stageNum < appCurrentRound) {
+              isCompleted = true;
+            } else if (stageNum == appCurrentRound) {
+              isStageRejected = true;
+            }
           } else {
-            if (stageNum < appCurrentRound) isCompleted = true;
-            else if (stageNum == appCurrentRound) isCurrent = true;
-            else isPending = true;
+            if (stageNum < appCurrentRound) {
+              isCompleted = true;
+            } else if (stageNum == appCurrentRound) {
+              isCurrent = true;
+            }
           }
 
           // ── Colors & icon ───────────────────────────────────────
@@ -1569,54 +1575,25 @@ class _RoundManagementScreenState
   Future<void> _offerSelected(List<String> appIds) async {
     final repo = ref.read(tpoRepositoryProvider);
     final user = Supabase.instance.client.auth.currentUser;
-    for (final appId in appIds) {
-      await repo.updateApplicationStatus(
-        applicationId: appId,
-        status: ApplicationStatus.selected,
-      );
-      final roundData = await ref.read(tpoRepositoryProvider).getDriveRounds(widget.drive.id);
-      final currentRound = roundData.where((r) => r.roundNumber == (_selectedRoundNumber ?? 1));
-      if (currentRound.isNotEmpty) {
-        await repo.addRoundRemarks(
-          applicationId: appId,
-          roundId: currentRound.first.id,
-          remarks: 'Offer selected',
-          performedBy: user?.id ?? '',
-        );
-      }
-    }
+    await repo.offerStudents(
+      driveId: widget.drive.id,
+      currentRoundNumber: _selectedRoundNumber ?? 1,
+      applicationIds: appIds,
+      performedBy: user?.id ?? '',
+    );
+    if (!mounted) return;
+    setState(() {
+      _selectedAppIds.removeAll(appIds);
+    });
     ref.invalidate(roundStudentsProvider((driveId: widget.drive.id, roundNumber: _selectedRoundNumber ?? 1)));
+    ref.invalidate(tpoOffersCountProvider);
 
-    try {
-      final emailService = ref.read(emailNotificationServiceProvider);
-      for (final appId in appIds) {
-        final appData = await Supabase.instance.client
-            .from('applications')
-            .select('student_id, student:profiles(email, name)')
-            .eq('id', appId)
-            .maybeSingle();
-        if (appData != null && appData['student'] != null) {
-          final student = appData['student'] as Map<String, dynamic>;
-          final email = student['email'] as String?;
-          final name = (student['name'] as String?) ?? 'Student';
-          if (email != null && email.contains('@')) {
-            emailService.sendOfferReleasedEmail(
-              recipientEmail: email,
-              studentName: name,
-              companyName: widget.drive.companyName,
-              roleTitle: widget.drive.roleTitle,
-              package: widget.drive.ctcOrStipend,
-            );
-          }
-        }
-      }
-    } catch (_) {}
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('🏆 ${appIds.length} candidate(s) offered selection!')),
-      );
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('🏆 ${appIds.length} candidate(s) offered selection!'),
+        backgroundColor: Colors.green.shade700,
+      ),
+    );
   }
 
   Future<void> _rejectStudents(List<String> appIds) async {
@@ -1713,6 +1690,54 @@ class _RoundManagementScreenState
     );
   }
 
+  Future<void> _sendDeadlineReminder() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text('Send Deadline Reminder', style: GoogleFonts.fraunces(color: Colors.white, fontSize: 18)),
+        content: Text(
+          'This will send instant Push Notifications and Emails to all eligible students who have not yet applied for ${widget.drive.companyName} (${widget.drive.roleTitle}).',
+          style: GoogleFonts.inter(color: Colors.white70, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.inter(color: Colors.white54)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD4AF37),
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.send_rounded, size: 16),
+            label: Text('Send Push & Email', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final repo = ref.read(tpoRepositoryProvider);
+    final user = Supabase.instance.client.auth.currentUser;
+    final count = await repo.sendDriveDeadlineReminder(
+      driveId: widget.drive.id,
+      performedBy: user?.id ?? 'TPO Admin',
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Dispatched deadline push notifications to $count eligible students.'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.green.shade700,
+        ),
+      );
+    }
+  }
+
   Future<void> _exportDriveExcelReport() async {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Generating Comprehensive Drive Excel Report...')),
@@ -1738,20 +1763,53 @@ class _RoundManagementScreenState
 
       final applications = (appsData as List);
 
-      // 3. Fetch round evaluations / history
+      // 3. Fetch round status / history
       final appIds = applications.map((a) => a['id'] as String).toList();
       List evaluations = [];
       if (appIds.isNotEmpty) {
-        final evaluationsData = await supabase
-            .from('application_round_evaluations')
-            .select('*, round:drive_rounds(round_number, round_name)')
-            .filter('application_id', 'in', appIds);
+        try {
+          final statusData = await supabase
+              .from('application_round_status')
+              .select('application_id, round_id, result, attended')
+              .filter('application_id', 'in', appIds);
 
-        evaluations = (evaluationsData as List);
+          evaluations = (statusData as List);
+        } catch (_) {}
       }
 
-      // 4. Create Excel Workbook
+      // 4. Fetch Drive Attendance (QR Scans)
+      final driveAttendanceMap = <String, Map<String, dynamic>>{};
+      try {
+        final attData = await supabase
+            .from('drive_attendance')
+            .select('student_id, scanned_at, status')
+            .eq('drive_id', widget.drive.id);
+        for (final a in (attData as List)) {
+          if (a is Map<String, dynamic> && a['student_id'] != null) {
+            driveAttendanceMap[a['student_id'] as String] = a;
+          }
+        }
+      } catch (_) {}
+
+      // 5. Create Excel Workbook
       final excel = excel_pkg.Excel.createExcel();
+      if (excel.sheets.containsKey('Sheet1')) {
+        excel.delete('Sheet1');
+      }
+
+      // Helper for scan time formatting
+      String formatScanTime(dynamic iso) {
+        if (iso == null || iso.toString().isEmpty) return '';
+        try {
+          final dt = DateTime.parse(iso.toString()).toLocal();
+          final h = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
+          final m = dt.minute.toString().padLeft(2, '0');
+          final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+          return ' ($h:$m $ampm)';
+        } catch (_) {
+          return '';
+        }
+      }
 
       // Sheet 1: Final Summary & Conclusions
       final summarySheet = excel['Final Conclusion'];
@@ -1774,30 +1832,52 @@ class _RoundManagementScreenState
       ]);
       summarySheet.appendRow([]); // Empty spacer row
 
-      // Headers for Summary
-      summarySheet.appendRow([
+      // Headers for Summary (including QR Scan & per-round attendance)
+      final summaryHeaders = <excel_pkg.CellValue>[
         excel_pkg.TextCellValue('USN / Roll No'),
         excel_pkg.TextCellValue('Student Name'),
         excel_pkg.TextCellValue('Department'),
         excel_pkg.TextCellValue('Email'),
         excel_pkg.TextCellValue('Phone'),
         excel_pkg.TextCellValue('CGPA'),
+        excel_pkg.TextCellValue('Drive QR Scan Attendance'),
+      ];
+
+      for (final r in rounds) {
+        summaryHeaders.add(excel_pkg.TextCellValue('Stage ${r.roundNumber}: ${r.roundName} (Attendance)'));
+        summaryHeaders.add(excel_pkg.TextCellValue('Stage ${r.roundNumber}: ${r.roundName} (Result)'));
+      }
+
+      summaryHeaders.addAll([
         excel_pkg.TextCellValue('Current Stage'),
         excel_pkg.TextCellValue('Final Status / Conclusion'),
         excel_pkg.TextCellValue('Offer Status'),
       ]);
 
+      summarySheet.appendRow(summaryHeaders);
+
       int offeredCount = 0;
       int rejectedCount = 0;
       int inProgressCount = 0;
+      int qrAttendedCount = 0;
 
       for (final app in applications) {
+        final appId = app['id'] as String;
+        final studentId = app['student_id'] as String? ?? '';
         final student = app['student'] as Map<String, dynamic>? ?? {};
         final status = app['status'] as String? ?? 'applied';
-        final currentRoundNum = app['current_round_number'] as int? ?? 1;
+        final currentRoundNum = app['current_round'] as int? ?? 1;
+
+        // Drive QR scan check
+        final qrRecord = driveAttendanceMap[studentId];
+        String qrScanText = 'Not Scanned (Absent)';
+        if (qrRecord != null && qrRecord['status'] != 'absent') {
+          qrAttendedCount++;
+          qrScanText = 'Present${formatScanTime(qrRecord['scanned_at'])}';
+        }
 
         String conclusion = 'In Selection Process';
-        if (status == 'offered') {
+        if (status == 'selected' || status == 'offered') {
           conclusion = 'FINAL SELECTED / OFFERED';
           offeredCount++;
         } else if (status == 'rejected') {
@@ -1807,22 +1887,61 @@ class _RoundManagementScreenState
           inProgressCount++;
         }
 
-        summarySheet.appendRow([
+        final rowValues = <excel_pkg.CellValue>[
           excel_pkg.TextCellValue((student['usn'] as String?) ?? 'N/A'),
           excel_pkg.TextCellValue((student['name'] as String?) ?? 'Student'),
           excel_pkg.TextCellValue((student['department'] as String?) ?? 'N/A'),
           excel_pkg.TextCellValue((student['email'] as String?) ?? ''),
           excel_pkg.TextCellValue((student['phone'] as String?) ?? 'N/A'),
           excel_pkg.TextCellValue(student['cgpa']?.toString() ?? 'N/A'),
+          excel_pkg.TextCellValue(qrScanText),
+        ];
+
+        // Append every round's attendance and result
+        for (final r in rounds) {
+          final roundStat = evaluations.firstWhere(
+            (e) => e['application_id'] == appId && e['round_id'] == r.id,
+            orElse: () => <String, dynamic>{},
+          );
+
+          final roundResult = roundStat['result'] as String?;
+          final attendedVal = roundStat['attended'];
+
+          String roundAttendance = 'N/A';
+          if (attendedVal == true) {
+            roundAttendance = 'Present';
+          } else if (attendedVal == false) {
+            roundAttendance = 'Absent';
+          } else if (currentRoundNum >= r.roundNumber || status == 'selected' || status == 'offered') {
+            roundAttendance = qrRecord != null ? 'Present' : 'Pending';
+          }
+
+          String roundResultText = 'N/A';
+          if (roundResult != null) {
+            roundResultText = roundResult.toUpperCase();
+          } else if (currentRoundNum > r.roundNumber || status == 'selected' || status == 'offered') {
+            roundResultText = 'CLEARED';
+          } else if (currentRoundNum == r.roundNumber) {
+            roundResultText = status == 'rejected' ? 'REJECTED' : 'IN PROGRESS';
+          }
+
+          rowValues.add(excel_pkg.TextCellValue(roundAttendance));
+          rowValues.add(excel_pkg.TextCellValue(roundResultText));
+        }
+
+        rowValues.addAll([
           excel_pkg.TextCellValue('Stage $currentRoundNum'),
           excel_pkg.TextCellValue(conclusion),
-          excel_pkg.TextCellValue(status.toUpperCase()),
+          excel_pkg.TextCellValue((status == 'selected' ? 'OFFERED' : status).toUpperCase()),
         ]);
+
+        summarySheet.appendRow(rowValues);
       }
 
       summarySheet.appendRow([]);
       summarySheet.appendRow([excel_pkg.TextCellValue('--- OVERALL DRIVE METRICS ---')]);
       summarySheet.appendRow([excel_pkg.TextCellValue('Total Applicants'), excel_pkg.IntCellValue(applications.length)]);
+      summarySheet.appendRow([excel_pkg.TextCellValue('Total Drive QR Check-ins'), excel_pkg.IntCellValue(qrAttendedCount)]);
       summarySheet.appendRow([excel_pkg.TextCellValue('Total Final Offers'), excel_pkg.IntCellValue(offeredCount)]);
       summarySheet.appendRow([excel_pkg.TextCellValue('Total Rejected'), excel_pkg.IntCellValue(rejectedCount)]);
       summarySheet.appendRow([excel_pkg.TextCellValue('In Progress'), excel_pkg.IntCellValue(inProgressCount)]);
@@ -1841,31 +1960,57 @@ class _RoundManagementScreenState
           excel_pkg.TextCellValue('USN'),
           excel_pkg.TextCellValue('Student Name'),
           excel_pkg.TextCellValue('Department'),
-          excel_pkg.TextCellValue('Stage Status'),
-          excel_pkg.TextCellValue('Attendance'),
-          excel_pkg.TextCellValue('Remarks / Feedback'),
+          excel_pkg.TextCellValue('Drive QR Scan'),
+          excel_pkg.TextCellValue('Stage Attendance'),
+          excel_pkg.TextCellValue('Stage Result'),
         ]);
 
         for (final app in applications) {
           final appId = app['id'] as String;
+          final studentId = app['student_id'] as String? ?? '';
           final student = app['student'] as Map<String, dynamic>? ?? {};
+          final currentRoundNum = app['current_round'] as int? ?? 1;
+          final appStatus = app['status'] as String? ?? 'applied';
 
-          final eval = evaluations.firstWhere(
-            (e) => e['application_id'] == appId && e['round']?['round_number'] == round.roundNumber,
+          final qrRecord = driveAttendanceMap[studentId];
+          String qrScanText = 'Not Scanned';
+          if (qrRecord != null && qrRecord['status'] != 'absent') {
+            qrScanText = 'Present${formatScanTime(qrRecord['scanned_at'])}';
+          }
+
+          final roundStat = evaluations.firstWhere(
+            (e) => e['application_id'] == appId && e['round_id'] == round.id,
             orElse: () => <String, dynamic>{},
           );
 
-          final stageStatus = eval['status'] as String? ?? (app['current_round_number'] >= round.roundNumber ? 'Qualified/Current' : 'N/A');
-          final attendance = eval['attendance'] as String? ?? 'Present';
-          final remarks = eval['remarks'] as String? ?? '';
+          final roundResult = roundStat['result'] as String?;
+          final attendedVal = roundStat['attended'];
+
+          String stageAttendance = 'N/A';
+          if (attendedVal == true) {
+            stageAttendance = 'Present';
+          } else if (attendedVal == false) {
+            stageAttendance = 'Absent';
+          } else if (currentRoundNum >= round.roundNumber || appStatus == 'selected' || appStatus == 'offered') {
+            stageAttendance = qrRecord != null ? 'Present' : 'Pending';
+          }
+
+          String stageStatus = 'N/A';
+          if (roundResult != null) {
+            stageStatus = roundResult.toUpperCase();
+          } else if (currentRoundNum > round.roundNumber || appStatus == 'selected' || appStatus == 'offered') {
+            stageStatus = 'CLEARED';
+          } else if (currentRoundNum == round.roundNumber) {
+            stageStatus = appStatus == 'rejected' ? 'REJECTED' : 'IN PROGRESS';
+          }
 
           roundSheet.appendRow([
             excel_pkg.TextCellValue((student['usn'] as String?) ?? 'N/A'),
             excel_pkg.TextCellValue((student['name'] as String?) ?? 'Student'),
             excel_pkg.TextCellValue((student['department'] as String?) ?? 'N/A'),
-            excel_pkg.TextCellValue(stageStatus.toUpperCase()),
-            excel_pkg.TextCellValue(attendance),
-            excel_pkg.TextCellValue(remarks),
+            excel_pkg.TextCellValue(qrScanText),
+            excel_pkg.TextCellValue(stageAttendance),
+            excel_pkg.TextCellValue(stageStatus),
           ]);
         }
       }

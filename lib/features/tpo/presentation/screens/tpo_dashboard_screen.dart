@@ -15,6 +15,8 @@ import '../../../../shared/presentation/widgets/status_thread_widget.dart';
 import '../../../../shared/presentation/widgets/subtle_divider.dart';
 import '../../../../shared/presentation/widgets/app_logo.dart';
 import '../../../../shared/presentation/widgets/app_refresh_indicator.dart';
+import '../../../../shared/presentation/widgets/interactive_feedback.dart';
+import '../../../../core/theme/app_motion.dart';
 import '../widgets/drive_qr_code_modal.dart';
 import 'drive_creation_wizard.dart';
 
@@ -70,7 +72,19 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
           children: [
             Positioned.fill(
               child: profileAsync.when(
-                data: (profile) => _buildTabContent(currentNavIndex, profile?.fullName ?? 'TPO Officer', brandTheme, theme),
+                data: (profile) => AnimatedSwitcher(
+                  duration: AppMotion.normal,
+                  switchInCurve: AppMotion.easeOutCubic,
+                  switchOutCurve: AppMotion.easeOutCubic,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                  child: KeyedSubtree(
+                    key: ValueKey<int>(currentNavIndex),
+                    child: _buildTabContent(currentNavIndex, profile?.fullName ?? 'TPO Officer', brandTheme, theme),
+                  ),
+                ),
                 loading: () => Padding(
                   padding: const EdgeInsets.only(top: 80, left: 16, right: 16),
                   child: Column(
@@ -94,7 +108,7 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
               Positioned(
                 right: AppSpacing.sp5,
                 bottom: 104,
-                child: GestureDetector(
+                child: InteractiveFeedback(
                   onTap: () => context.push('/tpo/create-drive'),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -127,7 +141,7 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
               Positioned(
                 right: AppSpacing.sp5,
                 bottom: 104,
-                child: GestureDetector(
+                child: InteractiveFeedback(
                   onTap: () => context.push('/tpo/appoint-faculty'),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -264,47 +278,57 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Bento Primary Tile (B1 - 1.3fr)
+                  // Bento Primary Tile (B1 - 1.3fr) -> Jump to Drives Tab
                   Expanded(
                     flex: 13,
-                    child: Container(
-                      constraints: const BoxConstraints(minHeight: 160),
-                      padding: const EdgeInsets.all(AppSpacing.sp5),
-                      decoration: ShapeDecoration(
-                        color: theme.colorScheme.surface,
-                        shape: ContinuousRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppShapes.radiusHero),
-                          side: BorderSide(color: brandTheme.cardBorder),
-                        ),
-                        shadows: brandTheme.shadow2,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '$activeDrivesCount',
-                                style: GoogleFonts.fraunces(
-                                  fontSize: 36,
-                                  fontWeight: FontWeight.w600,
-                                  color: brandTheme.brassPrimary,
-                                  height: 1.0,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Active Drives',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: brandTheme.textMuted,
-                                ),
-                              ),
-                            ],
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(AppShapes.radiusHero),
+                      onTap: () => ref.read(tpoDashboardTabProvider.notifier).state = 1,
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 160),
+                        padding: const EdgeInsets.all(AppSpacing.sp5),
+                        decoration: ShapeDecoration(
+                          color: theme.colorScheme.surface,
+                          shape: ContinuousRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppShapes.radiusHero),
+                            side: BorderSide(color: brandTheme.cardBorder),
                           ),
-                        ],
+                          shadows: brandTheme.shadow2,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '$activeDrivesCount',
+                                  style: GoogleFonts.fraunces(
+                                    fontSize: 36,
+                                    fontWeight: FontWeight.w600,
+                                    color: brandTheme.brassPrimary,
+                                    height: 1.0,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Active Drives',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        color: brandTheme.textMuted,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Icon(Icons.arrow_forward_rounded, size: 12, color: brandTheme.brassPrimary),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -318,71 +342,85 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                       child: Column(
                         children: [
                           Expanded(
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(AppSpacing.sp3),
-                              decoration: ShapeDecoration(
-                                color: theme.colorScheme.surface,
-                                shape: ContinuousRectangleBorder(
-                                  borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
-                                  side: BorderSide(color: brandTheme.cardBorder),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
+                              onTap: () => ref.read(tpoDashboardTabProvider.notifier).state = 1,
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(AppSpacing.sp3),
+                                decoration: ShapeDecoration(
+                                  color: theme.colorScheme.surface,
+                                  shape: ContinuousRectangleBorder(
+                                    borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
+                                    side: BorderSide(color: brandTheme.cardBorder),
+                                  ),
                                 ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    '$applicantsCount',
-                                    style: GoogleFonts.fraunces(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w600,
-                                      color: theme.colorScheme.onSurface,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      '$applicantsCount',
+                                      style: GoogleFonts.fraunces(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w600,
+                                        color: theme.colorScheme.onSurface,
+                                      ),
                                     ),
-                                  ),
-                                  Text(
-                                    'Applicants',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      color: brandTheme.textMuted,
+                                    Text(
+                                      'Applicants',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11,
+                                        color: brandTheme.textMuted,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                           const SizedBox(height: AppSpacing.sp2),
                           Expanded(
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(AppSpacing.sp3),
-                              decoration: ShapeDecoration(
-                                color: theme.colorScheme.surface,
-                                shape: ContinuousRectangleBorder(
-                                  borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
-                                  side: BorderSide(color: brandTheme.cardBorder),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
+                              onTap: () => ref.read(tpoDashboardTabProvider.notifier).state = 3,
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(AppSpacing.sp3),
+                                decoration: ShapeDecoration(
+                                  color: theme.colorScheme.surface,
+                                  shape: ContinuousRectangleBorder(
+                                    borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
+                                    side: BorderSide(color: brandTheme.cardBorder),
+                                  ),
                                 ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    '$offersCount',
-                                    style: GoogleFonts.fraunces(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w600,
-                                      color: brandTheme.statusShortlisted,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      '$offersCount',
+                                      style: GoogleFonts.fraunces(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w600,
+                                        color: brandTheme.statusShortlisted,
+                                      ),
                                     ),
-                                  ),
-                                  Text(
-                                    'Offers',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      color: brandTheme.textMuted,
+                                    Row(
+                                      children: [
+                                        Text(
+                                          'Offers',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11,
+                                            color: brandTheme.textMuted,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Icon(Icons.arrow_forward_rounded, size: 10, color: brandTheme.statusShortlisted),
+                                      ],
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -1046,6 +1084,25 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => context.push('/tpo/round-management', extra: drive),
+              icon: const Icon(Icons.workspace_premium_rounded, size: 18, color: Colors.black),
+              label: Text(
+                'Manage Selection Rounds & Offers',
+                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: brandTheme.brassPrimary,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: () {
                 showModalBottomSheet(
@@ -1068,7 +1125,7 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           // Action Buttons (Context-Aware)
           if (statusLower == 'completed' || statusLower == 'closed') ...[
@@ -1080,16 +1137,18 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
               ),
-              child: Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  const Icon(Icons.check_circle_rounded, size: 18, color: Colors.blueAccent),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Drive Completed & Closed',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueAccent),
-                  ),
-                ],
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.check_circle_rounded, size: 18, color: Colors.blueAccent),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Drive Completed & Closed',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueAccent),
+                    ),
+                  ],
+                ),
               ),
             ),
           ] else ...[
@@ -1097,7 +1156,7 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
               children: [
                 if (statusLower == 'upcoming')
                   Expanded(
-                    child: ElevatedButton.icon(
+                    child: OutlinedButton.icon(
                       onPressed: () async {
                         final repo = ref.read(tpoRepositoryProvider);
                         await repo.updateDriveStatus(driveId: drive.id, status: 'active');
@@ -1108,23 +1167,21 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                           );
                         }
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: brandTheme.brassPrimary,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        elevation: 0,
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: brandTheme.brassPrimary),
+                        padding: const EdgeInsets.symmetric(vertical: 11),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      icon: const Icon(Icons.play_arrow_rounded, size: 18, color: Colors.black),
+                      icon: Icon(Icons.play_arrow_rounded, size: 18, color: brandTheme.brassPrimary),
                       label: Text(
-                        'Start Rounds',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black),
+                        'Initiate Active Status',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: brandTheme.brassPrimary),
                       ),
                     ),
                   ),
                 if (statusLower == 'active' || statusLower == 'ongoing') ...[
                   Expanded(
-                    child: ElevatedButton.icon(
+                    child: OutlinedButton.icon(
                       onPressed: () async {
                         final repo = ref.read(tpoRepositoryProvider);
                         await repo.updateDriveStatus(driveId: drive.id, status: 'completed');
@@ -1135,17 +1192,15 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                           );
                         }
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: brandTheme.brassPrimary,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        elevation: 0,
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: brandTheme.cardBorder),
+                        padding: const EdgeInsets.symmetric(vertical: 11),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      icon: const Icon(Icons.check_circle_outline_rounded, size: 18, color: Colors.black),
+                      icon: Icon(Icons.check_circle_outline_rounded, size: 18, color: brandTheme.textMuted),
                       label: Text(
-                        'Finish Drive',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black),
+                        'Mark Drive Closed',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 12, color: brandTheme.textMuted),
                       ),
                     ),
                   ),

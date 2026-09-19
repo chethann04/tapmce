@@ -530,11 +530,21 @@ child: Container(
               _fieldHeader('APPLICATION DEADLINE (END DATE)', brandTheme),
               InkWell(
                 onTap: () async {
+                  final now = DateTime.now();
+                  final today = DateTime(now.year, now.month, now.day);
+                  final firstDate = _selectedDeadline.isBefore(today)
+                      ? DateTime(_selectedDeadline.year, _selectedDeadline.month, _selectedDeadline.day)
+                      : today;
+                  final lastDate = today.add(const Duration(days: 365 * 2));
+                  final initial = _selectedDeadline.isBefore(firstDate)
+                      ? firstDate
+                      : (_selectedDeadline.isAfter(lastDate) ? lastDate : _selectedDeadline);
+
                   final picked = await showDatePicker(
                     context: context,
-                    initialDate: _selectedDeadline,
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                    initialDate: initial,
+                    firstDate: firstDate,
+                    lastDate: lastDate,
                   );
                   if (picked != null) {
                     setState(() => _selectedDeadline = picked);

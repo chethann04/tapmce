@@ -1980,11 +1980,17 @@ class _DatePickerTile extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(AppShapes.radiusSmall),
       onTap: () async {
+        final firstDate = DateTime(1970);
+        final lastDate = DateTime.now().subtract(const Duration(days: 365 * 14));
+        var initial = selected ?? DateTime(2003, 1, 1);
+        if (initial.isBefore(firstDate)) initial = firstDate;
+        if (initial.isAfter(lastDate)) initial = lastDate;
+
         final picked = await showDatePicker(
           context: context,
-          initialDate: selected ?? DateTime(2000),
-          firstDate: DateTime(1980),
-          lastDate: DateTime.now().subtract(const Duration(days: 365 * 15)),
+          initialDate: initial,
+          firstDate: firstDate,
+          lastDate: lastDate,
         );
         onChanged(picked);
       },

@@ -22,7 +22,7 @@ class FacultyRepositoryImpl implements FacultyRepository {
     required int limit,
   }) async {
     // Mock implementation for UI wiring
-    return (data: PaginatedResponse<UserProfile>(items: [], totalCount: 0), failure: null);
+    return (data: const PaginatedResponse<UserProfile>(items: [], totalCount: 0), failure: null);
   }
 
   @override
@@ -208,6 +208,19 @@ class FacultyRepositoryImpl implements FacultyRepository {
           'type': status == ApprovalStatus.approved ? 'profile_approved' : 'profile_rejected',
           'created_at': DateTime.now().toIso8601String(),
         });
+
+        // 3. Dispatch Push Notification to Student
+        try {
+          await _supabase.functions.invoke('send-fcm-push', body: {
+            'user_ids': [studentId],
+            'title': status == ApprovalStatus.approved
+                ? 'Profile Approved! 🎉'
+                : 'Profile Verification Required ⚠️',
+            'body': status == ApprovalStatus.approved
+                ? 'Your academic profile has been verified by your coordinator. You are now eligible to apply for placement drives.'
+                : 'Your profile requires correction: ${rejectionReason ?? "Please meet your Faculty Coordinator."}',
+          });
+        } catch (_) {}
       }
     } catch (_) {
       // Non-blocking: failure in notification/email must not revert database approval

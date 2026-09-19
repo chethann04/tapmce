@@ -102,6 +102,13 @@ abstract class TpoRepository {
     required String performedBy,
   });
 
+  Future<void> offerStudents({
+    required String driveId,
+    required int currentRoundNumber,
+    required List<String> applicationIds,
+    required String performedBy,
+  });
+
   Future<void> rejectStudents({
     required String driveId,
     required int currentRoundNumber,
@@ -131,6 +138,18 @@ abstract class TpoRepository {
     required String type,
     String? driveId,
     String? applicationId,
+  });
+
+  Future<int> sendDriveDeadlineReminder({
+    required String driveId,
+    required String performedBy,
+  });
+
+  Future<void> sendBroadcastNotification({
+    required String title,
+    required String body,
+    List<String>? targetDepartments,
+    List<String>? targetRoles,
   });
 
   Future<List<Map<String, dynamic>>> getStudentRoundProgress(String applicationId);

@@ -409,6 +409,38 @@ class TpoRepositoryImpl implements TpoRepository {
       if (idx != -1) {
         _localDriveCache[idx] = updatedDrive;
       }
+
+      // Notify registered applicants about updated drive details/schedule
+      try {
+        final apps = await _supabase
+            .from('applications')
+            .select('student_id')
+            .eq('drive_id', driveId);
+        final studentIds = (apps as List)
+            .map((a) => a['student_id'] as String?)
+            .where((id) => id != null && id.isNotEmpty)
+            .cast<String>()
+            .toList();
+
+        if (studentIds.isNotEmpty) {
+          final compName = updatedDrive.companyName.isNotEmpty ? updatedDrive.companyName : 'Company';
+          for (final sid in studentIds) {
+            await _supabase.from('notifications').insert({
+              'user_id': sid,
+              'title': '🚨 Drive Updated: $compName',
+              'body': 'The recruitment details or schedule for $roleTitle have been updated by TPO.',
+              'type': 'drive_updated',
+              'drive_id': driveId,
+            });
+          }
+          await _supabase.functions.invoke('send-fcm-push', body: {
+            'user_ids': studentIds,
+            'title': '🚨 Drive Updated: $compName',
+            'body': 'The recruitment details or schedule for $roleTitle have been updated by TPO.',
+            'drive_id': driveId,
+          });
+        }
+      } catch (_) {}
     }
   }
 
@@ -816,6 +848,132 @@ class TpoRepositoryImpl implements TpoRepository {
   }
 
   @override
+  Future<void> offerStudents({
+    required String driveId,
+    required int currentRoundNumber,
+    required List<String> applicationIds,
+    required String performedBy,
+  }) async {
+    for (final appId in applicationIds) {
+      // Get student_id for notification
+      final appData = await _supabase
+          .from('applications')
+          .select('student_id')
+          .eq('id', appId)
+          .maybeSingle();
+      final studentId = appData?['student_id'] as String? ?? '';
+
+      // Update application status to selected
+      await _supabase
+          .from('applications')
+          .update({'status': 'selected'})
+          .eq('id', appId);
+
+      // Mark all rounds up to currentRoundNumber as cleared/attended in application_round_status
+      final allRounds = await _supabase
+          .from('drive_rounds')
+          .select('id, round_number')
+          .eq('drive_id', driveId)
+          .lte('round_number', currentRoundNumber);
+
+      for (final r in (allRounds as List)) {
+        await _supabase.from('application_round_status').upsert({
+          'application_id': appId,
+          'round_id': r['id'],
+          'attended': true,
+          'result': 'cleared',
+        }, onConflict: 'application_id,round_id');
+      }
+
+      // Log audit
+      try {
+        await _auditLogRepo.logAction(
+          action: AuditAction.other,
+          description: 'Student offered selection for drive',
+          targetId: appId,
+          targetTable: 'applications',
+        );
+      } catch (_) {}
+
+      // Send in-app notification to student
+      if (studentId.isNotEmpty) {
+        await sendNotification(
+          userId: studentId,
+          title: '🎉 Placement Offer Released!',
+          body: 'Congratulations! You have received an offer from recruitment selection.',
+          type: 'offer',
+          driveId: driveId,
+          applicationId: appId,
+        );
+      }
+
+      // Email dispatch for offer selection & Faculty coordinator push notification
+      if (studentId.isNotEmpty) {
+        try {
+          final studentProfile = await _supabase
+              .from('profiles')
+              .select('name, email, department, usn')
+              .eq('id', studentId)
+              .maybeSingle();
+
+          final driveInfo = await _supabase
+              .from('drives')
+              .select('role_title, ctc_or_stipend, company:companies!company_id(name)')
+              .eq('id', driveId)
+              .maybeSingle();
+
+          if (studentProfile != null && driveInfo != null) {
+            final compName = (driveInfo['company'] is Map ? (driveInfo['company'] as Map)['name'] : null) ?? 'Company';
+            final studentName = (studentProfile['name'] as String?) ?? 'Student';
+            final roleTitle = (driveInfo['role_title'] as String?) ?? '';
+            final package = (driveInfo['ctc_or_stipend'] as String?) ?? '';
+            final dept = studentProfile['department'] as String?;
+
+            if (_emailService != null && studentProfile['email'] != null) {
+              _emailService!.sendOfferReleasedEmail(
+                recipientEmail: studentProfile['email'] as String,
+                studentName: studentName,
+                companyName: compName,
+                roleTitle: roleTitle,
+                package: package,
+              );
+            }
+
+            // Also alert the Faculty Coordinator of that department
+            if (dept != null && dept.isNotEmpty) {
+              try {
+                final coordinators = await _supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('department', dept)
+                    .filter('role', 'in', ['faculty', 'coordinator']);
+                final coordIds = (coordinators as List).map((c) => c['id'] as String).toList();
+                if (coordIds.isNotEmpty) {
+                  for (final cId in coordIds) {
+                    await _supabase.from('notifications').insert({
+                      'user_id': cId,
+                      'title': '🎉 Student Placed: $dept',
+                      'body': '$studentName has received a job offer from $compName ($package)!',
+                      'type': 'placed_alert',
+                      'drive_id': driveId,
+                    });
+                  }
+                  await _supabase.functions.invoke('send-fcm-push', body: {
+                    'user_ids': coordIds,
+                    'title': '🎉 Student Placed: $dept',
+                    'body': '$studentName has received a job offer from $compName ($package)!',
+                    'drive_id': driveId,
+                  });
+                }
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
+      }
+    }
+  }
+
+  @override
   Future<void> rejectStudents({
     required String driveId,
     required int currentRoundNumber,
@@ -853,8 +1011,6 @@ class TpoRepositoryImpl implements TpoRepository {
           'round_id': roundData['id'],
           'attended': true,
           'result': 'rejected',
-          'remarks': remarks,
-          
         }, onConflict: 'application_id,round_id');
       }
 
@@ -948,8 +1104,6 @@ class TpoRepositoryImpl implements TpoRepository {
           'round_id': roundData['id'],
           'attended': false,
           'result': 'rejected',
-          'remarks': 'Marked absent',
-          
         }, onConflict: 'application_id,round_id');
       }
 
@@ -989,23 +1143,15 @@ class TpoRepositoryImpl implements TpoRepository {
     required String performedBy,
   }) async {
     try {
-      await _supabase.from('application_round_status').upsert({
-        'application_id': applicationId,
-        'round_id': roundId,
-        'remarks': remarks,
-      }, onConflict: 'application_id,round_id');
-    } catch (e) {
-      debugPrint('[TPORepositoryImpl] addRoundRemarks warning: $e');
-    }
-
-    try {
       await _auditLogRepo.logAction(
         action: AuditAction.other,
-        description: 'Remarks added to application',
+        description: 'Remarks added to application: $remarks',
         targetId: applicationId,
         targetTable: 'applications',
       );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[TPORepositoryImpl] addRoundRemarks warning: $e');
+    }
   }
 
   @override
@@ -1037,6 +1183,155 @@ class TpoRepositoryImpl implements TpoRepository {
         if (driveId != null) 'drive_id': driveId,
         if (applicationId != null) 'application_id': applicationId,
         'skip_in_app': true,
+      });
+    } catch (_) {}
+  }
+
+  @override
+  Future<int> sendDriveDeadlineReminder({
+    required String driveId,
+    required String performedBy,
+  }) async {
+    try {
+      // 1. Fetch drive info
+      final driveData = await _supabase
+          .from('drives')
+          .select('role_title, ctc_or_stipend, end_date, eligibility_branches, eligibility_cgpa, backlog_limit, company:companies!company_id(name)')
+          .eq('id', driveId)
+          .maybeSingle();
+
+      if (driveData == null) return 0;
+
+      final roleTitle = (driveData['role_title'] as String?) ?? 'Open Role';
+      final compName = (driveData['company'] is Map ? (driveData['company'] as Map)['name'] : null) ?? 'Company';
+      final package = (driveData['ctc_or_stipend'] as String?) ?? '';
+      final branches = (driveData['eligibility_branches'] as List?)?.cast<String>();
+      final minCgpa = (driveData['eligibility_cgpa'] as num?)?.toDouble();
+      final maxBacklogs = (driveData['backlog_limit'] as num?)?.toInt();
+
+      // 2. Fetch already applied student IDs
+      final appliedApps = await _supabase
+          .from('applications')
+          .select('student_id')
+          .eq('drive_id', driveId);
+      final appliedSet = (appliedApps as List)
+          .map((a) => a['student_id'] as String?)
+          .where((id) => id != null)
+          .cast<String>()
+          .toSet();
+
+      // 3. Query approved students matching department eligibility
+      var query = _supabase
+          .from('profiles')
+          .select('id, name, email, department, cgpa, active_backlogs')
+          .eq('role', 'student')
+          .eq('approval_status', 'approved');
+
+      if (branches != null && branches.isNotEmpty) {
+        query = query.filter('department', 'in', branches);
+      }
+
+      final studentProfiles = await query;
+      final targetStudents = <Map<String, dynamic>>[];
+
+      for (final s in (studentProfiles as List)) {
+        final sid = s['id'] as String?;
+        if (sid == null || appliedSet.contains(sid)) continue;
+
+        // Check CGPA & backlogs
+        final cgpa = (s['cgpa'] as num?)?.toDouble() ?? 0.0;
+        final backlogs = (s['active_backlogs'] as num?)?.toInt() ?? 0;
+
+        if (minCgpa != null && cgpa < minCgpa) continue;
+        if (maxBacklogs != null && backlogs > maxBacklogs) continue;
+
+        targetStudents.add(s as Map<String, dynamic>);
+      }
+
+      if (targetStudents.isEmpty) return 0;
+
+      final targetIds = targetStudents.map((s) => s['id'] as String).toList();
+      const deadlineTitle = '⏳ Application Deadline Reminder';
+      final deadlineBody = 'Applications for $compName ($roleTitle) close soon! Tap to submit your application.';
+
+      // Insert in-app notifications
+      for (final sid in targetIds) {
+        await _supabase.from('notifications').insert({
+          'user_id': sid,
+          'title': deadlineTitle,
+          'body': deadlineBody,
+          'type': 'deadline_reminder',
+          'drive_id': driveId,
+        });
+      }
+
+      // Dispatch FCM Push Notification in batch
+      await _supabase.functions.invoke('send-fcm-push', body: {
+        'user_ids': targetIds,
+        'title': deadlineTitle,
+        'body': deadlineBody,
+        'drive_id': driveId,
+      });
+
+      // Dispatch reminder emails
+      if (_emailService != null) {
+        for (final s in targetStudents) {
+          final email = s['email'] as String?;
+          final name = (s['name'] as String?) ?? 'Student';
+          if (email != null && email.isNotEmpty) {
+            _emailService!.sendReminderEmail(
+              recipientEmail: email,
+              studentName: name,
+              reminderTitle: 'Drive Deadline Reminder: $compName',
+              message: 'Applications for $compName - $roleTitle ($package) are closing soon. Please log in and submit your application before the deadline.',
+              deadline: driveData['end_date'] as String?,
+            );
+          }
+        }
+      }
+
+      return targetIds.length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  @override
+  Future<void> sendBroadcastNotification({
+    required String title,
+    required String body,
+    List<String>? targetDepartments,
+    List<String>? targetRoles,
+  }) async {
+    try {
+      var query = _supabase.from('profiles').select('id, email, name');
+
+      if (targetRoles != null && targetRoles.isNotEmpty) {
+        query = query.filter('role', 'in', targetRoles);
+      }
+      if (targetDepartments != null && targetDepartments.isNotEmpty) {
+        query = query.filter('department', 'in', targetDepartments);
+      }
+
+      final res = await query;
+      final profiles = (res as List).cast<Map<String, dynamic>>();
+      final userIds = profiles.map((p) => p['id'] as String).toList();
+
+      if (userIds.isEmpty) return;
+
+      for (final uid in userIds) {
+        await _supabase.from('notifications').insert({
+          'user_id': uid,
+          'title': title,
+          'body': body,
+          'type': 'announcement',
+        });
+      }
+
+      await _supabase.functions.invoke('send-fcm-push', body: {
+        'user_ids': userIds,
+        'title': title,
+        'body': body,
       });
     } catch (_) {}
   }

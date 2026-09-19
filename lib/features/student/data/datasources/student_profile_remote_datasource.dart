@@ -102,6 +102,41 @@ class StudentProfileRemoteDatasource {
     }
 
     await _client.from('profiles').upsert(updateMap);
+
+    // Notify Faculty Coordinator of this department for review
+    try {
+      final deptName = data.detectedCourseName;
+      if (deptName != null && deptName.isNotEmpty) {
+        final coordinators = await _client
+            .from('profiles')
+            .select('id')
+            .eq('department', deptName)
+            .filter('role', 'in', ['faculty', 'coordinator']);
+        final coordIds = (coordinators as List)
+            .map((c) => c['id'] as String?)
+            .where((id) => id != null && id.isNotEmpty)
+            .cast<String>()
+            .toList();
+
+        if (coordIds.isNotEmpty) {
+          final studentName = data.fullName.isNotEmpty ? data.fullName : 'A student';
+          final usnStr = data.usn != null && data.usn!.isNotEmpty ? ' (${data.usn})' : '';
+          for (final cId in coordIds) {
+            await _client.from('notifications').insert({
+              'user_id': cId,
+              'title': '📋 New Student Verification Request',
+              'body': '$studentName$usnStr submitted profile details for $deptName review.',
+              'type': 'verification_request',
+            });
+          }
+          await _client.functions.invoke('send-fcm-push', body: {
+            'user_ids': coordIds,
+            'title': '📋 New Student Verification Request',
+            'body': '$studentName$usnStr submitted profile details for $deptName review.',
+          });
+        }
+      }
+    } catch (_) {}
   }
 }
 

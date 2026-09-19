@@ -1,9 +1,14 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:excel/excel.dart' as excel_pkg;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/theme_extensions.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/presentation/widgets/skeleton_loader.dart';
@@ -20,6 +25,8 @@ class DepartmentAnalyticsScreen extends ConsumerStatefulWidget {
 
 class _DepartmentAnalyticsScreenState
     extends ConsumerState<DepartmentAnalyticsScreen> {
+  bool _isExporting = false;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -67,6 +74,17 @@ class _DepartmentAnalyticsScreenState
           foregroundColor: theme.colorScheme.onSurface,
           elevation: 0,
         actions: [
+          IconButton(
+            icon: _isExporting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.file_download_outlined, size: 22),
+            tooltip: 'Export Department Excel Report',
+            onPressed: _isExporting ? null : _exportDepartmentExcelReport,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, size: 22),
             onPressed: () => ref.invalidate(
@@ -177,6 +195,70 @@ class _DepartmentAnalyticsScreenState
           if (!hasData && errors.isEmpty) ...[
             _buildEmptyState(theme, brandTheme),
           ] else ...[
+            // ── Download Excel Report Card ─────────────────────────────
+            Container(
+              margin: const EdgeInsets.only(bottom: AppSpacing.sp5),
+              padding: const EdgeInsets.all(AppSpacing.sp4),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
+                border: Border.all(color: brandTheme.brassPrimary.withValues(alpha: 0.3)),
+                boxShadow: brandTheme.shadow1,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: brandTheme.brassSoft,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.table_chart_rounded, size: 22, color: brandTheme.brassPrimary),
+                  ),
+                  const SizedBox(width: AppSpacing.sp3),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Export Department Excel Report',
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Selected candidates, QR drive attendance & student roster',
+                          style: GoogleFonts.inter(fontSize: 11, color: brandTheme.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sp2),
+                  ElevatedButton.icon(
+                    onPressed: _isExporting ? null : _exportDepartmentExcelReport,
+                    icon: _isExporting
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                          )
+                        : const Icon(Icons.download_rounded, size: 16, color: Colors.black),
+                    label: Text(
+                      _isExporting ? 'Exporting...' : 'Export',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: brandTheme.brassPrimary,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
             // ── Overview: depends on 'profiles' + 'applications' ─
             _buildSectionTitle('Overview', brandTheme),
             const SizedBox(height: AppSpacing.sp3),
@@ -1443,6 +1525,409 @@ class _DepartmentAnalyticsScreenState
         ),
       ],
     );
+  }
+
+  // ── Excel Export Routine ─────────────────────────────────────────────
+  Future<void> _exportDepartmentExcelReport() async {
+    if (_isExporting) return;
+    setState(() => _isExporting = true);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Generating ${widget.department} Excel Report...'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    try {
+      final supabase = Supabase.instance.client;
+
+      // 1. Fetch all students in this department
+      final profilesResponse = await supabase
+          .from('profiles')
+          .select('id, name, usn, email, phone, semester, section, cgpa, active_backlogs, department, resume_url, approval_status')
+          .eq('department', widget.department)
+          .eq('role', 'student')
+          .order('usn', ascending: true);
+
+      final students = (profilesResponse as List);
+      final studentIds = students.map((s) => s['id'] as String).toList();
+
+      // 2. Fetch all drives with company information
+      final drivesResponse = await supabase
+          .from('drives')
+          .select('id, role, role_title, status, end_date, package_lpa, companies!company_id(id, name)')
+          .order('created_at', ascending: false);
+      final rawDrives = (drivesResponse as List);
+      final drives = <Map<String, dynamic>>[];
+      final driveMap = <String, Map<String, dynamic>>{};
+      for (final d in rawDrives) {
+        final comp = d['companies'];
+        final compName = comp is Map ? (comp['name'] as String? ?? 'Company') : 'Company';
+        final role = (d['role_title'] as String?) ?? (d['role'] as String?) ?? 'Role';
+        final pkg = d['package_lpa'] != null
+            ? '${d['package_lpa']} LPA'
+            : ((d['ctc_or_stipend'] as String?) ?? '—');
+
+        final item = Map<String, dynamic>.from(d as Map);
+        item['company_name'] = compName;
+        item['role_title'] = role;
+        item['ctc_or_stipend'] = pkg;
+        drives.add(item);
+        driveMap[d['id'] as String] = item;
+      }
+
+      // 3. Fetch applications for these department students
+      List applications = [];
+      if (studentIds.isNotEmpty) {
+        final appsResponse = await supabase
+            .from('applications')
+            .select('id, drive_id, student_id, status, current_round, applied_at')
+            .filter('student_id', 'in', studentIds);
+        applications = (appsResponse as List);
+      }
+      final appIds = applications.map((a) => a['id'] as String).toList();
+
+      // 4. Fetch drive attendance for department students
+      List attendance = [];
+      if (studentIds.isNotEmpty) {
+        final attResponse = await supabase
+            .from('drive_attendance')
+            .select('drive_id, student_id, status, scanned_at')
+            .filter('student_id', 'in', studentIds);
+        attendance = (attResponse as List);
+      }
+      final attendanceMap = <String, Map<String, dynamic>>{};
+      for (final a in attendance) {
+        final sid = a['student_id'] as String;
+        final did = a['drive_id'] as String;
+        attendanceMap['$sid|$did'] = a as Map<String, dynamic>;
+      }
+
+      // 5. Fetch round status for these applications
+      List roundStatuses = [];
+      if (appIds.isNotEmpty) {
+        try {
+          final rsResponse = await supabase
+              .from('application_round_status')
+              .select('application_id, round_id, attended, result')
+              .filter('application_id', 'in', appIds);
+          roundStatuses = (rsResponse as List);
+        } catch (_) {}
+      }
+      final roundStatusMap = <String, Map<String, dynamic>>{};
+      for (final rs in roundStatuses) {
+        final appId = rs['application_id'] as String?;
+        final roundId = rs['round_id'] as String?;
+        if (appId != null && roundId != null) {
+          roundStatusMap['$appId|$roundId'] = rs as Map<String, dynamic>;
+        }
+      }
+
+      // 6. Fetch drive rounds
+      final roundsResponse = await supabase
+          .from('drive_rounds')
+          .select('id, drive_id, round_number, round_name');
+      final driveRounds = (roundsResponse as List);
+      final roundsByDrive = <String, List<Map<String, dynamic>>>{};
+      for (final r in driveRounds) {
+        final did = r['drive_id'] as String;
+        roundsByDrive.putIfAbsent(did, () => []).add(r as Map<String, dynamic>);
+      }
+      for (final list in roundsByDrive.values) {
+        list.sort((a, b) => (a['round_number'] as int).compareTo(b['round_number'] as int));
+      }
+
+      // 7. Fetch offers
+      List offers = [];
+      if (appIds.isNotEmpty) {
+        try {
+          final offersResponse = await supabase
+              .from('offers')
+              .select('application_id, ctc_offered, status, joining_date')
+              .filter('application_id', 'in', appIds);
+          offers = (offersResponse as List);
+        } catch (_) {}
+      }
+      final offersByApp = <String, Map<String, dynamic>>{};
+      for (final o in offers) {
+        offersByApp[o['application_id'] as String] = o as Map<String, dynamic>;
+      }
+
+      // Helper for scan time formatting
+      String formatScanTime(dynamic iso) {
+        if (iso == null || iso.toString().isEmpty) return '';
+        try {
+          final dt = DateTime.parse(iso.toString()).toLocal();
+          final h = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
+          final m = dt.minute.toString().padLeft(2, '0');
+          final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+          return ' ($h:$m $ampm)';
+        } catch (_) {
+          return '';
+        }
+      }
+
+      // ── Create Excel Workbook ─────────────────────────────
+      final excel = excel_pkg.Excel.createExcel();
+      if (excel.sheets.containsKey('Sheet1')) {
+        excel.delete('Sheet1');
+      }
+
+      // ── Sheet 1: Selected & Placed Students ─────────────────
+      final placedSheet = excel['Placed & Selected Students'];
+      excel.setDefaultSheet('Placed & Selected Students');
+
+      placedSheet.appendRow([
+        excel_pkg.TextCellValue('Department of ${widget.department} - Placed & Selected Students Report'),
+      ]);
+      placedSheet.appendRow([
+        excel_pkg.TextCellValue('Department:'),
+        excel_pkg.TextCellValue(widget.department),
+        excel_pkg.TextCellValue('Export Date:'),
+        excel_pkg.TextCellValue(DateTime.now().toString().split('.')[0]),
+      ]);
+      placedSheet.appendRow([]);
+
+      placedSheet.appendRow([
+        excel_pkg.TextCellValue('USN'),
+        excel_pkg.TextCellValue('Student Name'),
+        excel_pkg.TextCellValue('Email'),
+        excel_pkg.TextCellValue('Phone'),
+        excel_pkg.TextCellValue('CGPA'),
+        excel_pkg.TextCellValue('Company Offered'),
+        excel_pkg.TextCellValue('Role Title'),
+        excel_pkg.TextCellValue('Package / CTC'),
+        excel_pkg.TextCellValue('Offer Status'),
+      ]);
+
+      int totalPlacedCount = 0;
+      final placedStudentsSet = <String>{};
+
+      for (final app in applications) {
+        final status = app['status'] as String? ?? 'applied';
+        if (status == 'selected' || status == 'offered') {
+          final sid = app['student_id'] as String;
+          final student = students.firstWhere((s) => s['id'] == sid, orElse: () => <String, dynamic>{});
+          final did = app['drive_id'] as String;
+          final drive = driveMap[did] ?? {};
+          final offer = offersByApp[app['id'] as String];
+
+          totalPlacedCount++;
+          placedStudentsSet.add(sid);
+
+          final packageText = offer != null && offer['ctc_offered'] != null
+              ? '${offer['ctc_offered']} LPA'
+              : ((drive['ctc_or_stipend'] as String?) ?? 'As per drive');
+
+          placedSheet.appendRow([
+            excel_pkg.TextCellValue((student['usn'] as String?) ?? 'N/A'),
+            excel_pkg.TextCellValue((student['name'] as String?) ?? 'Student'),
+            excel_pkg.TextCellValue((student['email'] as String?) ?? ''),
+            excel_pkg.TextCellValue((student['phone'] as String?) ?? 'N/A'),
+            excel_pkg.TextCellValue(student['cgpa']?.toString() ?? 'N/A'),
+            excel_pkg.TextCellValue((drive['company_name'] as String?) ?? 'Company'),
+            excel_pkg.TextCellValue((drive['role_title'] as String?) ?? 'Role'),
+            excel_pkg.TextCellValue(packageText),
+            excel_pkg.TextCellValue('SELECTED / OFFERED'),
+          ]);
+        }
+      }
+
+      placedSheet.appendRow([]);
+      placedSheet.appendRow([excel_pkg.TextCellValue('--- PLACEMENT METRICS ---')]);
+      placedSheet.appendRow([excel_pkg.TextCellValue('Total Offers Received:'), excel_pkg.IntCellValue(totalPlacedCount)]);
+      placedSheet.appendRow([excel_pkg.TextCellValue('Unique Students Placed:'), excel_pkg.IntCellValue(placedStudentsSet.length)]);
+      placedSheet.appendRow([excel_pkg.TextCellValue('Total Department Students:'), excel_pkg.IntCellValue(students.length)]);
+
+      // ── Sheet 2: Drive Attendance & Participation ─────────
+      final attendanceSheet = excel['Drive Attendance & Results'];
+      attendanceSheet.appendRow([
+        excel_pkg.TextCellValue('Department of ${widget.department} - Drive Participation & Attendance Report'),
+      ]);
+      attendanceSheet.appendRow([]);
+
+      attendanceSheet.appendRow([
+        excel_pkg.TextCellValue('USN'),
+        excel_pkg.TextCellValue('Student Name'),
+        excel_pkg.TextCellValue('Company'),
+        excel_pkg.TextCellValue('Role'),
+        excel_pkg.TextCellValue('Drive QR Attendance'),
+        excel_pkg.TextCellValue('Current Stage Reached'),
+        excel_pkg.TextCellValue('Round-by-Round Evaluations'),
+        excel_pkg.TextCellValue('Final Status'),
+      ]);
+
+      for (final app in applications) {
+        final sid = app['student_id'] as String;
+        final student = students.firstWhere((s) => s['id'] == sid, orElse: () => <String, dynamic>{});
+        final did = app['drive_id'] as String;
+        final drive = driveMap[did] ?? {};
+        final appStatus = app['status'] as String? ?? 'applied';
+        final currentRoundNum = app['current_round'] as int? ?? 1;
+        final appId = app['id'] as String;
+
+        final att = attendanceMap['$sid|$did'];
+        String qrText = 'Not Scanned (Absent)';
+        if (att != null && att['status'] != 'absent') {
+          qrText = 'Present${formatScanTime(att['scanned_at'])}';
+        }
+
+        final rounds = roundsByDrive[did] ?? [];
+        String stageName = 'Stage $currentRoundNum';
+        final roundMatch = rounds.where((r) => r['round_number'] == currentRoundNum);
+        if (roundMatch.isNotEmpty) {
+          stageName = 'Stage $currentRoundNum: ${roundMatch.first['round_name']}';
+        }
+
+        final roundsProgress = <String>[];
+        for (final r in rounds) {
+          final rId = r['id'] as String;
+          final rNum = r['round_number'];
+          final rName = r['round_name'];
+          final rs = roundStatusMap['$appId|$rId'];
+          if (rs != null) {
+            final res = (rs['result'] as String?)?.toUpperCase() ?? 'PENDING';
+            final attnd = rs['attended'] == true ? 'Attended' : 'Absent';
+            roundsProgress.add('R$rNum ($rName): $attnd | $res');
+          }
+        }
+        final roundProgressSummary = roundsProgress.isNotEmpty ? roundsProgress.join('; ') : 'No stage evaluations';
+
+        String finalStatusText = appStatus.toUpperCase();
+        if (appStatus == 'selected' || appStatus == 'offered') {
+          finalStatusText = 'OFFERED 🏆';
+        }
+
+        attendanceSheet.appendRow([
+          excel_pkg.TextCellValue((student['usn'] as String?) ?? 'N/A'),
+          excel_pkg.TextCellValue((student['name'] as String?) ?? 'Student'),
+          excel_pkg.TextCellValue((drive['company_name'] as String?) ?? 'Company'),
+          excel_pkg.TextCellValue((drive['role_title'] as String?) ?? 'Role'),
+          excel_pkg.TextCellValue(qrText),
+          excel_pkg.TextCellValue(stageName),
+          excel_pkg.TextCellValue(roundProgressSummary),
+          excel_pkg.TextCellValue(finalStatusText),
+        ]);
+      }
+
+      // ── Sheet 3: Department Students Master List ──────────
+      final masterSheet = excel['Department Students Roster'];
+      masterSheet.appendRow([
+        excel_pkg.TextCellValue('Department of ${widget.department} - Complete Student Master List'),
+      ]);
+      masterSheet.appendRow([]);
+
+      masterSheet.appendRow([
+        excel_pkg.TextCellValue('USN'),
+        excel_pkg.TextCellValue('Student Name'),
+        excel_pkg.TextCellValue('Email'),
+        excel_pkg.TextCellValue('Phone'),
+        excel_pkg.TextCellValue('Semester'),
+        excel_pkg.TextCellValue('Section'),
+        excel_pkg.TextCellValue('CGPA'),
+        excel_pkg.TextCellValue('Active Backlogs'),
+        excel_pkg.TextCellValue('Drives Applied'),
+        excel_pkg.TextCellValue('Offers Received'),
+        excel_pkg.TextCellValue('Placement Status'),
+        excel_pkg.TextCellValue('Resume Uploaded'),
+      ]);
+
+      for (final s in students) {
+        final sid = s['id'] as String;
+        final studentApps = applications.where((a) => a['student_id'] == sid).toList();
+        final studentOffers = studentApps.where((a) => a['status'] == 'selected' || a['status'] == 'offered').length;
+
+        String placementStatus = 'NOT APPLIED';
+        if (studentOffers > 0) {
+          placementStatus = 'PLACED / SELECTED';
+        } else if (studentApps.isNotEmpty) {
+          placementStatus = studentApps.any((a) => a['status'] != 'rejected') ? 'IN PROCESS' : 'REJECTED';
+        }
+
+        final hasResume = (s['resume_url'] as String?)?.isNotEmpty == true ? 'YES' : 'NO';
+
+        masterSheet.appendRow([
+          excel_pkg.TextCellValue((s['usn'] as String?) ?? 'N/A'),
+          excel_pkg.TextCellValue((s['name'] as String?) ?? 'Student'),
+          excel_pkg.TextCellValue((s['email'] as String?) ?? ''),
+          excel_pkg.TextCellValue((s['phone'] as String?) ?? 'N/A'),
+          excel_pkg.TextCellValue(s['semester']?.toString() ?? '—'),
+          excel_pkg.TextCellValue((s['section'] as String?) ?? '—'),
+          excel_pkg.TextCellValue(s['cgpa']?.toString() ?? '—'),
+          excel_pkg.TextCellValue(s['active_backlogs']?.toString() ?? '0'),
+          excel_pkg.IntCellValue(studentApps.length),
+          excel_pkg.IntCellValue(studentOffers),
+          excel_pkg.TextCellValue(placementStatus),
+          excel_pkg.TextCellValue(hasResume),
+        ]);
+      }
+
+      // ── Sheet 4: Drive-by-Drive Department Performance ─────
+      final driveSheet = excel['Company & Drive Analytics'];
+      driveSheet.appendRow([
+        excel_pkg.TextCellValue('Department of ${widget.department} - Company Drive Performance'),
+      ]);
+      driveSheet.appendRow([]);
+
+      driveSheet.appendRow([
+        excel_pkg.TextCellValue('Company Name'),
+        excel_pkg.TextCellValue('Role Title'),
+        excel_pkg.TextCellValue('Package / CTC'),
+        excel_pkg.TextCellValue('Drive Status'),
+        excel_pkg.TextCellValue('Dept Applicants'),
+        excel_pkg.TextCellValue('Dept Attendees (QR)'),
+        excel_pkg.TextCellValue('Dept Offers'),
+        excel_pkg.TextCellValue('Selection Rate %'),
+      ]);
+
+      for (final d in drives) {
+        final did = d['id'] as String;
+        final driveApps = applications.where((a) => a['drive_id'] == did).toList();
+        final driveOffers = driveApps.where((a) => a['status'] == 'selected' || a['status'] == 'offered').length;
+        final attendees = driveApps.where((a) => attendanceMap['${a['student_id']}|$did']?['status'] != 'absent' && attendanceMap['${a['student_id']}|$did'] != null).length;
+
+        final selRate = driveApps.isNotEmpty ? ((driveOffers / driveApps.length) * 100).toStringAsFixed(1) : '0.0';
+
+        driveSheet.appendRow([
+          excel_pkg.TextCellValue((d['company_name'] as String?) ?? 'Company'),
+          excel_pkg.TextCellValue((d['role_title'] as String?) ?? 'Role'),
+          excel_pkg.TextCellValue((d['ctc_or_stipend'] as String?) ?? '—'),
+          excel_pkg.TextCellValue(((d['status'] as String?) ?? 'upcoming').toUpperCase()),
+          excel_pkg.IntCellValue(driveApps.length),
+          excel_pkg.IntCellValue(attendees),
+          excel_pkg.IntCellValue(driveOffers),
+          excel_pkg.TextCellValue('$selRate%'),
+        ]);
+      }
+
+      // Save & Share File
+      final fileBytes = excel.save();
+      if (fileBytes != null) {
+        final tempDir = await getTemporaryDirectory();
+        final sanitizedDept = widget.department.replaceAll(RegExp(r'[^\w\s-]'), '_');
+        final fileName = '${sanitizedDept}_Placement_Attendance_Report_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+        final file = File('${tempDir.path}/$fileName');
+        await file.writeAsBytes(fileBytes);
+
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          text: 'Department of ${widget.department} Placement, Attendance & Selected Students Report',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to export Excel report: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isExporting = false);
+      }
+    }
   }
 }
 

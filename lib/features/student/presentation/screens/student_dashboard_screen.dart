@@ -19,6 +19,9 @@ import '../../domain/entities/drive.dart';
 import 'student_application_timeline_screen.dart';
 import '../providers/student_timeline_provider.dart';
 import '../../../../shared/presentation/widgets/app_refresh_indicator.dart';
+import '../../../../core/theme/app_motion.dart';
+
+import '../../../../shared/presentation/widgets/animated_counter.dart';
 
 class StudentDashboardScreen extends ConsumerStatefulWidget {
   const StudentDashboardScreen({super.key});
@@ -82,7 +85,21 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
           children: [
             // Content layer with bottom padding for floating bar
             Positioned.fill(
-              child: _buildTabContent(currentNavIndex, profile, brandTheme, theme),
+              child: AnimatedSwitcher(
+                duration: AppMotion.normal,
+                switchInCurve: AppMotion.easeOutCubic,
+                switchOutCurve: AppMotion.easeOutCubic,
+                transitionBuilder: (child, animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  );
+                },
+                child: KeyedSubtree(
+                  key: ValueKey<int>(currentNavIndex),
+                  child: _buildTabContent(currentNavIndex, profile, brandTheme, theme),
+                ),
+              ),
             ),
 
             // Floating Pill Nav Bar
@@ -211,35 +228,45 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
                     children: [
                       Expanded(
                         flex: 13,
-                        child: Container(
-                          height: 140,
-                          padding: const EdgeInsets.all(AppSpacing.sp4),
-                          decoration: ShapeDecoration(
-                            color: theme.colorScheme.surface,
-                            shape: ContinuousRectangleBorder(
-                              borderRadius: BorderRadius.circular(AppShapes.radiusHero),
-                              side: BorderSide(color: brandTheme.cardBorder),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(AppShapes.radiusHero),
+                          onTap: () => ref.read(studentDashboardTabProvider.notifier).state = 2,
+                          child: Container(
+                            constraints: const BoxConstraints(minHeight: 140),
+                            padding: const EdgeInsets.all(AppSpacing.sp5),
+                            decoration: ShapeDecoration(
+                              color: theme.colorScheme.surface,
+                              shape: ContinuousRectangleBorder(
+                                borderRadius: BorderRadius.circular(AppShapes.radiusHero),
+                                side: BorderSide(color: brandTheme.cardBorder),
+                              ),
+                              shadows: brandTheme.shadow2,
                             ),
-                            shadows: brandTheme.shadow2,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                '${apps.length}',
-                                style: GoogleFonts.fraunces(
-                                  fontSize: 34,
-                                  fontWeight: FontWeight.w600,
-                                  color: brandTheme.brassPrimary,
-                                  height: 1.0,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                AnimatedCounter(
+                                  targetValue: apps.length,
+                                  style: GoogleFonts.fraunces(
+                                    fontSize: 34,
+                                    fontWeight: FontWeight.w600,
+                                    color: brandTheme.brassPrimary,
+                                    height: 1.0,
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                'Active applications',
-                                style: GoogleFonts.inter(fontSize: 12, color: brandTheme.textMuted),
-                              ),
-                            ],
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Active applications',
+                                      style: GoogleFonts.inter(fontSize: 12, color: brandTheme.textMuted),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Icon(Icons.arrow_forward_rounded, size: 12, color: brandTheme.brassPrimary),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -251,45 +278,65 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
                           child: Column(
                             children: [
                               Expanded(
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp3, vertical: AppSpacing.sp2),
-                                  decoration: ShapeDecoration(
-                                    color: theme.colorScheme.surface,
-                                    shape: ContinuousRectangleBorder(
-                                      borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
-                                      side: BorderSide(color: brandTheme.cardBorder),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
+                                  onTap: () => ref.read(studentDashboardTabProvider.notifier).state = 2,
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp3, vertical: AppSpacing.sp2),
+                                    decoration: ShapeDecoration(
+                                      color: theme.colorScheme.surface,
+                                      shape: ContinuousRectangleBorder(
+                                        borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
+                                        side: BorderSide(color: brandTheme.cardBorder),
+                                      ),
                                     ),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text('$shortlistedCount', style: GoogleFonts.fraunces(fontSize: 20, fontWeight: FontWeight.w600)),
-                                      Text('Shortlisted', style: GoogleFonts.inter(fontSize: 11, color: brandTheme.textMuted)),
-                                    ],
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        AnimatedCounter(
+                                          targetValue: shortlistedCount,
+                                          style: GoogleFonts.fraunces(fontSize: 20, fontWeight: FontWeight.w600),
+                                        ),
+                                        Text('Shortlisted', style: GoogleFonts.inter(fontSize: 11, color: brandTheme.textMuted)),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
                               const SizedBox(height: AppSpacing.sp2),
                               Expanded(
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp3, vertical: AppSpacing.sp2),
-                                  decoration: ShapeDecoration(
-                                    color: theme.colorScheme.surface,
-                                    shape: ContinuousRectangleBorder(
-                                      borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
-                                      side: BorderSide(color: brandTheme.cardBorder),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
+                                  onTap: () => ref.read(studentDashboardTabProvider.notifier).state = 2,
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp3, vertical: AppSpacing.sp2),
+                                    decoration: ShapeDecoration(
+                                      color: theme.colorScheme.surface,
+                                      shape: ContinuousRectangleBorder(
+                                        borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
+                                        side: BorderSide(color: brandTheme.cardBorder),
+                                      ),
                                     ),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text('$offersCount', style: GoogleFonts.fraunces(fontSize: 20, fontWeight: FontWeight.w600, color: brandTheme.statusShortlisted)),
-                                      Text('Offers', style: GoogleFonts.inter(fontSize: 11, color: brandTheme.textMuted)),
-                                    ],
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        AnimatedCounter(
+                                          targetValue: offersCount,
+                                          style: GoogleFonts.fraunces(fontSize: 20, fontWeight: FontWeight.w600, color: brandTheme.statusShortlisted),
+                                        ),
+                                        Row(
+                                          children: [
+                                            Text('Offers', style: GoogleFonts.inter(fontSize: 11, color: brandTheme.textMuted)),
+                                            const SizedBox(width: 4),
+                                            Icon(Icons.arrow_forward_rounded, size: 10, color: brandTheme.statusShortlisted),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
@@ -470,40 +517,44 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
 
         final timeAgo = _formatTimeAgo(app.appliedAt);
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: AppSpacing.sp2),
-          padding: const EdgeInsets.all(AppSpacing.sp4),
-          decoration: ShapeDecoration(
-            color: theme.colorScheme.surface,
-            shape: ContinuousRectangleBorder(
-              borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
-              side: BorderSide(color: brandTheme.cardBorder),
+        return InkWell(
+          borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
+          onTap: () => ref.read(studentDashboardTabProvider.notifier).state = 2,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sp2),
+            padding: const EdgeInsets.all(AppSpacing.sp4),
+            decoration: ShapeDecoration(
+              color: theme.colorScheme.surface,
+              shape: ContinuousRectangleBorder(
+                borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
+                side: BorderSide(color: brandTheme.cardBorder),
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: iconColor.withValues(alpha: 0.16),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: iconColor.withValues(alpha: 0.16),
+                  ),
+                  child: Icon(icon, size: 18, color: iconColor),
                 ),
-                child: Icon(icon, size: 18, color: iconColor),
-              ),
-              const SizedBox(width: AppSpacing.sp3),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(actionText, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 2),
-                    Text(roleName, style: GoogleFonts.inter(fontSize: 12, color: brandTheme.textMuted)),
-                  ],
+                const SizedBox(width: AppSpacing.sp3),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(actionText, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 2),
+                      Text(roleName, style: GoogleFonts.inter(fontSize: 12, color: brandTheme.textMuted)),
+                    ],
+                  ),
                 ),
-              ),
-              Text(timeAgo, style: GoogleFonts.ibmPlexMono(fontSize: 10, color: brandTheme.textMuted)),
-            ],
+                Text(timeAgo, style: GoogleFonts.ibmPlexMono(fontSize: 10, color: brandTheme.textMuted)),
+              ],
+            ),
           ),
         );
       }).toList(),

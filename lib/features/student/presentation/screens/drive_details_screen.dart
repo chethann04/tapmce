@@ -13,6 +13,8 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../domain/entities/drive.dart';
 import '../providers/student_drive_provider.dart';
 import '../../../../core/services/email_notification_service.dart';
+import '../../../../shared/presentation/widgets/animated_checkmark.dart';
+import '../../../../shared/presentation/widgets/celebration_overlay.dart';
 
 /// Full-screen drive details with eligibility check, consent, summary, and submit.
 class DriveDetailsScreen extends ConsumerStatefulWidget {
@@ -348,6 +350,7 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
         setState(() {
           _isAppliedState = true;
         });
+        CelebrationOverlay.show(context);
         _showSuccessSheet(null);
       }
     } catch (e) {
@@ -991,14 +994,9 @@ class _SuccessSheet extends StatelessWidget {
           children: [
             Container(width: 40, height: 4, decoration: BoxDecoration(color: brandTheme.cardBorder, borderRadius: BorderRadius.circular(100))),
             const SizedBox(height: AppSpacing.sp6),
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: brandTheme.statusShortlisted.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.check_rounded, size: 32, color: brandTheme.statusShortlisted),
+            AnimatedCheckmark(
+              size: 64,
+              color: brandTheme.statusShortlisted,
             ),
             const SizedBox(height: AppSpacing.sp4),
             Text('Application Submitted', style: GoogleFonts.fraunces(fontSize: 22, fontWeight: FontWeight.w600)),
