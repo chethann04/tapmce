@@ -12,20 +12,29 @@ import '../../../auth/domain/entities/user_profile.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../domain/entities/drive.dart';
 import '../providers/student_drive_provider.dart';
+import '../providers/student_timeline_provider.dart';
 import '../../../../core/services/email_notification_service.dart';
 import '../../../../shared/presentation/widgets/animated_checkmark.dart';
 import '../../../../shared/presentation/widgets/celebration_overlay.dart';
 
+import '../../../../core/utils/file_name_extractor.dart';
+import '../../domain/entities/application.dart';
+
 /// Full-screen drive details with eligibility check, consent, summary, and submit.
 class DriveDetailsScreen extends ConsumerStatefulWidget {
-  final Drive drive;
-  const DriveDetailsScreen({required this.drive, super.key});
+  final Drive? drive;
+  final String? driveId;
+  const DriveDetailsScreen({this.drive, this.driveId, super.key});
 
   @override
   ConsumerState<DriveDetailsScreen> createState() => _DriveDetailsScreenState();
 }
 
 class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
+  Drive? _loadedDrive;
+  bool _isLoadingDrive = false;
+  String? _loadDriveError;
+
   bool _consentProfile = false;
   bool _consentResume = false;
   bool _consentNoWithdraw = false;
@@ -36,7 +45,52 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
   Uint8List? _customResumeBytes;
   String? _customResumeFileName;
 
-  Drive get _drive => widget.drive;
+  Drive? get _maybeDrive => widget.drive ?? _loadedDrive;
+  Drive get _drive => _maybeDrive!;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.drive == null && widget.driveId != null) {
+      _fetchDriveById(widget.driveId!);
+    }
+  }
+
+  Future<void> _fetchDriveById(String id) async {
+    setState(() {
+      _isLoadingDrive = true;
+      _loadDriveError = null;
+    });
+    try {
+      final data = await Supabase.instance.client
+          .from('drives')
+          .select('*, company:companies(*), drive_rounds(*)')
+          .eq('id', id)
+          .maybeSingle();
+      if (data == null) {
+        if (mounted) {
+          setState(() {
+            _isLoadingDrive = false;
+            _loadDriveError = 'Placement drive not found.';
+          });
+        }
+        return;
+      }
+      if (mounted) {
+        setState(() {
+          _loadedDrive = Drive.fromMap(data);
+          _isLoadingDrive = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingDrive = false;
+          _loadDriveError = 'Failed to load drive details: $e';
+        });
+      }
+    }
+  }
 
   // ── Eligibility computation ─────────────────────────────────────────────
 
@@ -114,6 +168,15 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
       ));
     }
 
+    // Drive status check: only active/open/ongoing drives can accept applications
+    final driveStatus = _drive.status.toLowerCase();
+    final isActive = driveStatus == 'active' || driveStatus == 'open' || driveStatus == 'ongoing';
+    checks.add(_EligibilityCheck(
+      label: 'Drive Active',
+      passed: isActive,
+      detail: isActive ? null : 'Applications are closed because this drive is ${_drive.status.toUpperCase()}.',
+    ));
+
     // Registration deadline
     final now = DateTime.now();
     final deadlineOk = _drive.applicationDeadline.isAfter(now);
@@ -159,6 +222,22 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) return;
+
+      // Validate drive status before submitting
+      final driveStatus = _drive.status.toLowerCase();
+      final isActive = driveStatus == 'active' || driveStatus == 'open' || driveStatus == 'ongoing';
+      if (!isActive) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('⚠️ Cannot apply: This drive is ${_drive.status.toUpperCase()} and not accepting applications.'),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+        return;
+      }
 
       // Check System Setting: allow_multiple_offers policy
       final sysSettings = await Supabase.instance.client
@@ -343,6 +422,7 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
 
       // Refresh providers
       ref.invalidate(studentApplicationsProvider);
+      ref.invalidate(studentTimelineProvider);
       ref.invalidate(studentEligibleDrivesProvider);
       ref.invalidate(studentAppliedDriveIdsProvider);
 
@@ -387,22 +467,117 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
 
   bool get _consentAllChecked => _consentProfile && _consentResume && _consentNoWithdraw && _consentShare;
 
-  // ── Build ───────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final brandTheme = theme.extension<AppBrandTheme>()!;
+
+    if (_isLoadingDrive) {
+      return Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        appBar: AppBar(
+          title: Text('Placement Drive', style: GoogleFonts.fraunces(fontWeight: FontWeight.w600)),
+          backgroundColor: theme.colorScheme.surface,
+          foregroundColor: theme.colorScheme.onSurface,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/student');
+              }
+            },
+          ),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_maybeDrive == null) {
+      return Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        appBar: AppBar(
+          title: Text('Drive Details', style: GoogleFonts.fraunces(fontWeight: FontWeight.w600)),
+          backgroundColor: theme.colorScheme.surface,
+          foregroundColor: theme.colorScheme.onSurface,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/student');
+              }
+            },
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.sp5),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline_rounded, size: 48, color: brandTheme.statusRejected),
+                const SizedBox(height: 12),
+                Text(
+                  _loadDriveError ?? 'Drive not found or has been removed.',
+                  style: GoogleFonts.inter(fontSize: 14),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go('/student');
+                    }
+                  },
+                  child: const Text('Back to Dashboard'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final profileAsync = ref.watch(authNotifierProvider);
     final profile = profileAsync.valueOrNull;
     final eligibility = _checkEligibility(profile);
 
+    final appsAsync = ref.watch(studentApplicationsProvider);
+    Application? appRecord;
+    try {
+      final appsList = appsAsync.valueOrNull;
+      if (appsList != null) {
+        for (final a in appsList) {
+          if (a.driveId == _drive.id) {
+            appRecord = a;
+            break;
+          }
+        }
+      }
+    } catch (_) {}
+
     final dbApplied = ref.watch(studentAppliedDriveIdsProvider).contains(_drive.id);
-    final alreadyApplied = _isAppliedState || dbApplied;
+    final alreadyApplied = _isAppliedState || dbApplied || appRecord != null;
+    final attachedResume = (appRecord?.rawData['resume_version_url'] as String?) ?? profile?.resumeUrl;
+
+    final driveStatus = _drive.status.toLowerCase();
+    final isClosed = driveStatus == 'closed' ||
+        driveStatus == 'completed' ||
+        driveStatus == 'cancelled' ||
+        !_drive.applicationDeadline.isAfter(DateTime.now());
 
     final daysLeft = _drive.applicationDeadline.difference(DateTime.now()).inDays;
-    final deadlineLabel = daysLeft > 0 ? '$daysLeft days left' : 'Closing today';
-    final statusColor = _drive.status == 'open' ? brandTheme.statusShortlisted : brandTheme.textMuted;
+    final deadlineLabel = isClosed ? 'Registration Closed' : (daysLeft > 0 ? '$daysLeft days left' : 'Closing today');
+    final statusColor = !isClosed && (driveStatus == 'open' || driveStatus == 'active' || driveStatus == 'ongoing')
+        ? brandTheme.statusShortlisted
+        : (isClosed ? brandTheme.statusRejected : brandTheme.brassPrimary);
 
     return PopScope(
       canPop: false,
@@ -479,7 +654,10 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
                       color: statusColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(100),
                     ),
-                    child: Text(_drive.status.toUpperCase(), style: GoogleFonts.ibmPlexMono(fontSize: 10, fontWeight: FontWeight.w700, color: statusColor)),
+                    child: Text(
+                      isClosed ? 'CLOSED' : _drive.status.toUpperCase(),
+                      style: GoogleFonts.ibmPlexMono(fontSize: 10, fontWeight: FontWeight.w700, color: statusColor),
+                    ),
                   ),
                 ],
               ),
@@ -565,7 +743,95 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
               ),
             ),
 
-            if (!alreadyApplied) ...[
+            // ── Application Status Card (for already-applied students) ──
+            if (alreadyApplied) ...[
+              const SizedBox(height: AppSpacing.sp4),
+              _sectionCard(
+                theme: theme,
+                brandTheme: brandTheme,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _sectionLabel('Application Status', brandTheme),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: brandTheme.statusShortlisted.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(100),
+                            border: Border.all(color: brandTheme.statusShortlisted.withValues(alpha: 0.4)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle_rounded, size: 14, color: brandTheme.statusShortlisted),
+                              const SizedBox(width: 4),
+                              Text(
+                                (appRecord?.status.name.toUpperCase() ?? 'APPLIED'),
+                                style: GoogleFonts.ibmPlexMono(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: brandTheme.statusShortlisted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sp3),
+                    _infoRowCard(
+                      Icons.assignment_turned_in_outlined,
+                      'Current State',
+                      appRecord != null ? 'Registered (${appRecord.status.name.toUpperCase()})' : 'Application registered',
+                      brandTheme,
+                      theme,
+                    ),
+                    const SizedBox(height: 8),
+                    _infoRowCard(
+                      Icons.access_time_rounded,
+                      'Applied On',
+                      appRecord != null
+                          ? DateFormat('dd MMM yyyy, hh:mm a').format(appRecord.appliedAt.toLocal())
+                          : DateFormat('dd MMM yyyy').format(DateTime.now()),
+                      brandTheme,
+                      theme,
+                    ),
+                    if (attachedResume != null && attachedResume.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      _infoRowCard(
+                        Icons.description_outlined,
+                        'Attached Resume',
+                        FileNameExtractor.extract(attachedResume),
+                        brandTheme,
+                        theme,
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.sp4),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        context.push('/student/timeline');
+                      },
+                      icon: Icon(Icons.timeline_rounded, size: 16, color: brandTheme.brassPrimary),
+                      label: Text(
+                        'Track Application Progress',
+                        style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: brandTheme.brassPrimary),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: brandTheme.brassPrimary.withValues(alpha: 0.5)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // ── Application Form & Consent (Only shown if NOT already applied and drive is active) ──
+            if (!alreadyApplied && !isClosed) ...[
               const SizedBox(height: AppSpacing.sp4),
 
               // ── Eligibility Verification ──────────────────────────────
@@ -719,70 +985,17 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
           border: Border(top: BorderSide(color: brandTheme.cardBorder)),
         ),
         child: alreadyApplied
-            ? GestureDetector(
-                onTap: () {
-                  // Return to the previous screen (dashboard/eligible drives)
-                  // instead of resetting the whole navigation stack.
-                  if (context.canPop()) {
-                    context.pop();
-                  } else {
-                    context.go('/student');
-                  }
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    gradient: brandTheme.brassGradient,
-                    borderRadius: BorderRadius.circular(AppShapes.radiusSmall),
-                    boxShadow: [
-                      BoxShadow(
-                        color: brandTheme.brassPrimary.withValues(alpha: 0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.timeline_rounded, size: 18, color: brandTheme.onBrass),
-                      const SizedBox(width: 10),
-                      Flexible(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text(
-                              'View Recruitment Progress',
-                              style: GoogleFonts.inter(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: brandTheme.onBrass,
-                              ),
-                            ),
-                            Text(
-                              'See your recruitment journey',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w400,
-                                color: brandTheme.onBrass.withValues(alpha: 0.75),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded, size: 16, color: brandTheme.onBrass.withValues(alpha: 0.7)),
-                    ],
-                  ),
-                ),
-              )
-            : Row(
+            ? Row(
                 children: [
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => Navigator.pop(context),
+                      onTap: () {
+                        if (context.canPop()) {
+                          context.pop();
+                        } else {
+                          context.go('/student');
+                        }
+                      },
                       child: Container(
                         height: 48,
                         decoration: BoxDecoration(
@@ -798,33 +1011,127 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
                   const SizedBox(width: AppSpacing.sp3),
                   Expanded(
                     flex: 2,
-                    child: GestureDetector(
-                      onTap: (eligibility.eligible && _consentAllChecked && !_isSubmitting)
-                          ? () => _submitApplication(profile)
-                          : null,
-                      child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient: (eligibility.eligible && _consentAllChecked) ? brandTheme.brassGradient : null,
-                          color: (eligibility.eligible && _consentAllChecked) ? null : brandTheme.cardBorder,
-                          borderRadius: BorderRadius.circular(AppShapes.radiusSmall),
-                        ),
-                        child: Center(
-                          child: _isSubmitting
-                              ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: brandTheme.onBrass))
-                              : Text('Apply Now', style: GoogleFonts.inter(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: (eligibility.eligible && _consentAllChecked) ? brandTheme.onBrass : brandTheme.textMuted,
-                                )),
-                        ),
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: brandTheme.statusShortlisted.withValues(alpha: 0.15),
+                        border: Border.all(color: brandTheme.statusShortlisted.withValues(alpha: 0.4)),
+                        borderRadius: BorderRadius.circular(AppShapes.radiusSmall),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.check_circle_rounded, size: 18, color: brandTheme.statusShortlisted),
+                          const SizedBox(width: 8),
+                          Text(
+                            isClosed ? 'ALREADY APPLIED · CLOSED' : 'ALREADY APPLIED',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: brandTheme.statusShortlisted,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ],
-              ),
+              )
+            : isClosed
+                ? Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            if (context.canPop()) {
+                              context.pop();
+                            } else {
+                              context.go('/student');
+                            }
+                          },
+                          child: Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: brandTheme.cardBorder),
+                              borderRadius: BorderRadius.circular(AppShapes.radiusSmall),
+                            ),
+                            child: Center(
+                              child: Text('Back', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: brandTheme.textMuted)),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sp3),
+                      Expanded(
+                        flex: 2,
+                        child: Container(
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: brandTheme.cardBorder.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(AppShapes.radiusSmall),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'APPLICATION CLOSED',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: brandTheme.textMuted,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: brandTheme.cardBorder),
+                              borderRadius: BorderRadius.circular(AppShapes.radiusSmall),
+                            ),
+                            child: Center(
+                              child: Text('Back', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: brandTheme.textMuted)),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sp3),
+                      Expanded(
+                        flex: 2,
+                        child: GestureDetector(
+                          onTap: (eligibility.eligible && _consentAllChecked && !_isSubmitting)
+                              ? () => _submitApplication(profile)
+                              : null,
+                          child: Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              gradient: (eligibility.eligible && _consentAllChecked) ? brandTheme.brassGradient : null,
+                              color: (eligibility.eligible && _consentAllChecked) ? null : brandTheme.cardBorder,
+                              borderRadius: BorderRadius.circular(AppShapes.radiusSmall),
+                            ),
+                            child: Center(
+                              child: _isSubmitting
+                                  ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: brandTheme.onBrass))
+                                  : Text('Apply Now', style: GoogleFonts.inter(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: (eligibility.eligible && _consentAllChecked) ? brandTheme.onBrass : brandTheme.textMuted,
+                                    )),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+        ),
       ),
-    ));
+    );
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────

@@ -35,7 +35,7 @@ class StudentApplicationTimelineScreen extends ConsumerWidget {
       body: timelineAsync.when(
         data: (applications) {
           if (applications.isEmpty) {
-            return _emptyState(context, theme, brandTheme, topPadding);
+            return _emptyState(context, ref, theme, brandTheme, topPadding);
           }
           return AppRefreshIndicator(
             onRefresh: () async {
@@ -117,52 +117,61 @@ class StudentApplicationTimelineScreen extends ConsumerWidget {
   );
   }
 
-  Widget _emptyState(BuildContext context, ThemeData theme, AppBrandTheme brandTheme, double topPadding) {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.only(top: topPadding + 80),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: brandTheme.brassSoft,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.timeline_rounded, size: 40, color: brandTheme.brassPrimary),
-            ),
-            const SizedBox(height: AppSpacing.sp4),
-            Text('No active applications',
-                style: GoogleFonts.fraunces(fontSize: 20, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            Text(
-              'Apply to upcoming campus drives to track your progress.',
-              style: GoogleFonts.inter(fontSize: 13, color: brandTheme.textMuted),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.sp5),
-            GestureDetector(
-              onTap: () => context.go('/student'),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                decoration: BoxDecoration(
-                  gradient: brandTheme.brassGradient,
-                  borderRadius: BorderRadius.circular(12),
+  Widget _emptyState(BuildContext context, WidgetRef ref, ThemeData theme, AppBrandTheme brandTheme, double topPadding) {
+    return AppRefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(studentTimelineProvider);
+        await ref.read(studentTimelineProvider.future);
+      },
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          Padding(
+            padding: EdgeInsets.only(top: topPadding + 80),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: brandTheme.brassSoft,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.timeline_rounded, size: 40, color: brandTheme.brassPrimary),
                 ),
-                child: Text(
-                  'Explore Drives',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                const SizedBox(height: AppSpacing.sp4),
+                Text('No active applications',
+                    style: GoogleFonts.fraunces(fontSize: 20, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Text(
+                  'Apply to upcoming campus drives to track your progress.',
+                  style: GoogleFonts.inter(fontSize: 13, color: brandTheme.textMuted),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppSpacing.sp5),
+                GestureDetector(
+                  onTap: () => context.go('/student'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    decoration: BoxDecoration(
+                      gradient: brandTheme.brassGradient,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Explore Drives',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -333,44 +342,70 @@ class _StructuredApplicationCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Stage ${data.currentRound} of ${data.totalRounds}',
+                      data.status.toLowerCase() == 'selected'
+                          ? 'All Stages Cleared 🏆'
+                          : data.status.toLowerCase() == 'rejected'
+                              ? 'Stage ${data.currentRound} of ${data.totalRounds}'
+                              : 'Stage ${data.currentRound} of ${data.totalRounds}',
                       style: GoogleFonts.ibmPlexMono(
-                          fontSize: 11, fontWeight: FontWeight.w700, color: brandTheme.brassPrimary),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: data.status.toLowerCase() == 'selected'
+                              ? brandTheme.statusShortlisted
+                              : data.status.toLowerCase() == 'rejected'
+                                  ? brandTheme.statusRejected
+                                  : brandTheme.brassPrimary),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                if (data.rounds.isEmpty)
-                  Text(
-                    'No stages configured yet.',
-                    style: GoogleFonts.inter(fontSize: 12, color: brandTheme.textMuted),
-                  )
-                else
-                  ...List.generate(data.rounds.length, (i) {
-                    final round = data.rounds[i];
-                    final roundId = round['id'] as String? ?? '';
-                    final roundName = (round['round_name'] as String?)?.isNotEmpty == true
-                        ? round['round_name'] as String
-                        : 'Round ${i + 1}';
-                    final progress = data.progressForRound(roundId);
-                    final isLast = i == data.rounds.length - 1;
-                    // currentRound is 1-indexed; rounds list is 0-indexed
-                    final roundNumber = i + 1;
-                    final isCurrent = roundNumber == data.currentRound;
-                    // A round is "past" if it's before the current round
-                    final isPast = roundNumber < data.currentRound;
+                () {
+                  final isOffered = data.status.toLowerCase() == 'selected' || data.status.toLowerCase() == 'offered';
+                  final effectiveCurrentRound = data.currentRound > 0 ? data.currentRound : 1;
 
-                    return _stageNode(
-                      roundName: roundName,
-                      roundNum: roundNumber,
-                      progress: progress,
-                      isCurrent: isCurrent,
-                      isPast: isPast,
-                      isLast: isLast,
-                      brandTheme: brandTheme,
-                      theme: theme,
+                  // Show ONLY stages up to currentRound. Future stages remain hidden until promoted.
+                  final visibleRounds = isOffered
+                      ? data.rounds
+                      : data.rounds.where((round) {
+                          final roundNumber = (round['round_number'] as int?) ?? (data.rounds.indexOf(round) + 1);
+                          return roundNumber <= effectiveCurrentRound;
+                        }).toList();
+
+                  if (visibleRounds.isEmpty) {
+                    return Text(
+                      'No stages configured yet.',
+                      style: GoogleFonts.inter(fontSize: 12, color: brandTheme.textMuted),
                     );
-                  }),
+                  }
+
+                  return Column(
+                    children: List.generate(visibleRounds.length, (i) {
+                      final round = visibleRounds[i];
+                      final roundId = round['id'] as String? ?? '';
+                      final roundNumber = (round['round_number'] as int?) ?? (data.rounds.indexOf(round) + 1);
+                      final roundName = (round['round_name'] as String?)?.isNotEmpty == true
+                          ? round['round_name'] as String
+                          : 'Stage $roundNumber';
+                      final progress = data.progressForRound(roundId);
+                      final isLastVisible = i == visibleRounds.length - 1;
+                      final isFinalRoundOfDrive = roundNumber >= data.totalRounds;
+                      final isCurrent = roundNumber == data.currentRound && !isOffered;
+                      final isPast = roundNumber < data.currentRound || isOffered;
+
+                      return _stageNode(
+                        roundName: roundName,
+                        roundNum: roundNumber,
+                        progress: progress,
+                        isCurrent: isCurrent,
+                        isPast: isPast,
+                        isLastVisible: isLastVisible,
+                        isFinalRoundOfDrive: isFinalRoundOfDrive,
+                        brandTheme: brandTheme,
+                        theme: theme,
+                      );
+                    }),
+                  );
+                }(),
               ],
             ),
           ),
@@ -385,13 +420,21 @@ class _StructuredApplicationCard extends StatelessWidget {
     Map<String, dynamic>? progress,
     required bool isCurrent,
     required bool isPast,
-    required bool isLast,
+    required bool isLastVisible,
+    required bool isFinalRoundOfDrive,
     required AppBrandTheme brandTheme,
     required ThemeData theme,
   }) {
     final result = progress?['result'] as String? ?? 'pending';
     final attended = progress?['attended'] as bool? ?? false;
-    final (badgeColor, badgeText, iconData) = _getStageStatus(result, attended, isCurrent, isPast, isLast, brandTheme);
+    final (badgeColor, badgeText, iconData) = _getStageStatus(
+      result,
+      attended,
+      isCurrent,
+      isPast,
+      isFinalRoundOfDrive,
+      brandTheme,
+    );
 
     return IntrinsicHeight(
       child: Row(
@@ -413,11 +456,13 @@ class _StructuredApplicationCard extends StatelessWidget {
                     child: Icon(iconData, size: 12, color: Colors.white),
                   ),
                 ),
-                if (!isLast)
+                if (!isLastVisible)
                   Expanded(
                     child: Container(
                       width: 2,
-                      color: brandTheme.cardBorder,
+                      color: isPast
+                          ? brandTheme.statusShortlisted.withValues(alpha: 0.6)
+                          : brandTheme.cardBorder,
                     ),
                   ),
               ],
@@ -438,7 +483,9 @@ class _StructuredApplicationCard extends StatelessWidget {
                 border: Border.all(
                   color: isCurrent
                       ? brandTheme.brassPrimary.withValues(alpha: 0.4)
-                      : brandTheme.cardBorder,
+                      : isPast
+                          ? brandTheme.statusShortlisted.withValues(alpha: 0.3)
+                          : brandTheme.cardBorder,
                 ),
               ),
               child: Row(
@@ -488,13 +535,13 @@ class _StructuredApplicationCard extends StatelessWidget {
   }
 
   (Color, String, IconData) _getStageStatus(
-      String result, bool attended, bool isCurrent, bool isPast, bool isLast, AppBrandTheme brandTheme) {
+      String result, bool attended, bool isCurrent, bool isPast, bool isFinalRoundOfDrive, AppBrandTheme brandTheme) {
     final res = result.toLowerCase();
     final overallStatus = data.status.toLowerCase();
 
     // Explicit result from DB takes highest priority
-    if (res == 'cleared' || res == 'passed' || res == 'selected' || res == 'offered' || (isLast && overallStatus == 'selected')) {
-      if (isLast || res == 'selected' || res == 'offered' || overallStatus == 'selected') {
+    if (res == 'cleared' || res == 'passed' || res == 'selected' || res == 'offered' || (isFinalRoundOfDrive && overallStatus == 'selected')) {
+      if ((isFinalRoundOfDrive && overallStatus == 'selected') || res == 'selected' || res == 'offered') {
         return (brandTheme.statusShortlisted, 'Offered', Icons.emoji_events_rounded);
       }
       return (brandTheme.statusShortlisted, 'Cleared', Icons.check_rounded);
@@ -503,7 +550,7 @@ class _StructuredApplicationCard extends StatelessWidget {
       return (brandTheme.statusRejected, 'Not Selected', Icons.close_rounded);
     }
     // No explicit result yet — use position relative to currentRound
-    if (isLast && (isCurrent || isPast) && overallStatus == 'selected') {
+    if (isFinalRoundOfDrive && (isCurrent || isPast) && overallStatus == 'selected') {
       return (brandTheme.statusShortlisted, 'Offered', Icons.emoji_events_rounded);
     }
     if (isCurrent) {

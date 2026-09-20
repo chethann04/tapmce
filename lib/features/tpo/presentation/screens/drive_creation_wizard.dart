@@ -238,16 +238,21 @@ class _DriveCreationWizardState extends ConsumerState<DriveCreationWizard> {
               );
             }
 
-            // Save in-app notification to Supabase notifications table
+            // Save in-app notification to Supabase notifications table (idempotent)
             final studentId = student['id'] as String?;
             if (studentId != null) {
-              await Supabase.instance.client.from('notifications').insert({
-                'user_id': studentId,
-                'title': 'New Drive Announced: $companyName',
-                'body': 'Role: $roleTitle | Package: $package | Deadline: $deadlineStr',
-                'type': 'info',
-                'drive_id': targetDriveId,
-              });
+              try {
+                await Supabase.instance.client.from('notifications').upsert({
+                  'user_id': studentId,
+                  'title': 'New Drive Announced: $companyName',
+                  'body': 'Role: $roleTitle | Package: $package | Deadline: $deadlineStr',
+                  'type': 'info',
+                  'drive_id': targetDriveId,
+                  'idempotency_key': 'drive:$targetDriveId:created',
+                }, onConflict: 'user_id,idempotency_key');
+              } catch (notifErr) {
+                debugPrint('[DriveCreation] In-app notification upsert warning: $notifErr');
+              }
             }
           }
 

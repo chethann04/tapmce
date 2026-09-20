@@ -11,6 +11,8 @@ import '../../../../core/theme/theme_extensions.dart';
 import '../../../../core/services/email_notification_service.dart';
 import '../../../../shared/presentation/widgets/subtle_divider.dart';
 import '../../../student/domain/entities/drive.dart';
+import '../../../student/presentation/providers/student_timeline_provider.dart';
+import '../../../student/presentation/providers/student_drive_provider.dart';
 import '../../domain/entities/drive_round.dart';
 import '../providers/tpo_provider.dart';
 
@@ -96,15 +98,7 @@ class _RoundManagementScreenState
           ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, size: 20),
-            onPressed: () {
-              ref.invalidate(driveRoundsProvider(widget.drive.id));
-              if (_selectedRoundNumber != null) {
-                ref.invalidate(roundStudentsProvider((
-                  driveId: widget.drive.id,
-                  roundNumber: _selectedRoundNumber!,
-                )));
-              }
-            },
+            onPressed: () => _refreshAllRoundData(),
             tooltip: 'Refresh Pipeline',
           ),
         ],
@@ -199,9 +193,7 @@ class _RoundManagementScreenState
             final isSelected = _selectedRoundNumber == roundNum;
 
             final params = (driveId: widget.drive.id, roundNumber: roundNum);
-            final candidateCount = isSelected
-                ? (ref.watch(roundStudentsProvider(params)).valueOrNull?.length ?? 0)
-                : (ref.read(roundStudentsProvider(params)).valueOrNull?.length ?? 0);
+            final candidateCount = ref.watch(roundStudentsProvider(params)).valueOrNull?.length ?? 0;
 
             return Row(
               children: [
@@ -524,45 +516,58 @@ class _RoundManagementScreenState
         }).toList();
 
         if (filteredStudents.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+          return RefreshIndicator(
+            onRefresh: () async => _refreshAllRoundData(),
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
               children: [
-                Icon(
-                  _searchQuery.isNotEmpty ? Icons.search_off_rounded : Icons.person_off_rounded,
-                  size: 44,
-                  color: brandTheme.textMuted,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  _searchQuery.isNotEmpty ? 'No candidates match search' : 'No candidates in this stage filter',
-                  style: GoogleFonts.fraunces(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Try selecting a different filter or search term.',
-                  style: GoogleFonts.inter(fontSize: 12, color: brandTheme.textMuted),
+                SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _searchQuery.isNotEmpty ? Icons.search_off_rounded : Icons.person_off_rounded,
+                        size: 44,
+                        color: brandTheme.textMuted,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        _searchQuery.isNotEmpty ? 'No candidates match search' : 'No candidates in this stage filter',
+                        style: GoogleFonts.fraunces(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Try selecting a different filter or search term.',
+                        style: GoogleFonts.inter(fontSize: 12, color: brandTheme.textMuted),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           );
         }
 
-        return ListView.separated(
-          padding: const EdgeInsets.only(left: 14, right: 14, top: 4, bottom: 90),
-          itemCount: filteredStudents.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
-          itemBuilder: (context, index) {
-            final app = filteredStudents[index];
-            return _buildStudentCard(
-              app: app,
-              rounds: rounds,
-              activeRound: activeRound,
-              isLastRound: isLastRound,
-              theme: theme,
-              brandTheme: brandTheme,
-            );
-          },
+        return RefreshIndicator(
+          onRefresh: () async => _refreshAllRoundData(),
+          child: ListView.separated(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.only(left: 14, right: 14, top: 4, bottom: 90),
+            itemCount: filteredStudents.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              final app = filteredStudents[index];
+              return _buildStudentCard(
+                app: app,
+                rounds: rounds,
+                activeRound: activeRound,
+                isLastRound: isLastRound,
+                theme: theme,
+                brandTheme: brandTheme,
+              );
+            },
+          ),
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -746,74 +751,102 @@ class _RoundManagementScreenState
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                if (app['attended_at'] != null)
-                  Row(
-                    children: [
-                      Icon(Icons.qr_code_scanner_rounded, size: 12, color: brandTheme.brassPrimary),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Scanned at ${_formatTime(app['attended_at'] as String)}',
-                        style: GoogleFonts.ibmPlexMono(fontSize: 10, color: brandTheme.brassPrimary),
-                      ),
-                    ],
-                  )
-                else
-                  Text(
-                    'Tap card for complete timeline',
-                    style: GoogleFonts.inter(fontSize: 11, color: brandTheme.textMuted, fontStyle: FontStyle.italic),
-                  ),
+                Flexible(
+                  child: app['attended_at'] != null
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.qr_code_scanner_rounded, size: 12, color: brandTheme.brassPrimary),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                'Scanned at ${_formatTime(app['attended_at'] as String)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.ibmPlexMono(fontSize: 10, color: brandTheme.brassPrimary),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          'Tap for details',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(fontSize: 10, color: brandTheme.textMuted, fontStyle: FontStyle.italic),
+                        ),
+                ),
+                const SizedBox(width: 6),
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (!isLastRound && status != 'rejected')
-                      TextButton.icon(
-                        onPressed: () => _moveToNextRound([appId]),
-                        icon: const Icon(Icons.arrow_forward_rounded, size: 14),
-                        label: Text('Promote', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold)),
-                        style: TextButton.styleFrom(
-                          foregroundColor: brandTheme.brassPrimary,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      )
-                    else if (isLastRound && status != 'rejected' && status != 'selected')
-                      TextButton.icon(
-                        onPressed: () => _offerSelected([appId]),
-                        icon: const Icon(Icons.emoji_events_rounded, size: 14),
-                        label: Text('Offer', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold)),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.green.shade400,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ),
-                    PopupMenuButton<String>(
-                      icon: Icon(Icons.more_vert_rounded, size: 18, color: brandTheme.textMuted),
-                      onSelected: (act) => _handleAction(act, app),
-                      itemBuilder: (_) => [
-                        if (!isLastRound && status != 'rejected')
-                          PopupMenuItem(
-                            value: 'move',
-                            child: Row(
-                              children: [
-                                const Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.amber),
-                                const SizedBox(width: 8),
-                                Text('Move to Next Round', style: GoogleFonts.inter(fontSize: 12)),
-                              ],
-                            ),
-                          )
-                        else if (isLastRound && status != 'selected')
-                          PopupMenuItem(
-                            value: 'offer',
-                            child: Row(
-                              children: [
-                                const Icon(Icons.emoji_events_rounded, size: 16, color: Colors.green),
-                                const SizedBox(width: 8),
-                                Text('Offer Selection', style: GoogleFonts.inter(fontSize: 12, color: Colors.green)),
-                              ],
-                            ),
+                    if (status != 'rejected' && status != 'selected' && status != 'offered') ...[
+                      if (appCurrentRound >= rounds.length)
+                        TextButton.icon(
+                          onPressed: () => _offerSelected([appId]),
+                          icon: const Icon(Icons.emoji_events_rounded, size: 14),
+                          label: Text('Offer', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold)),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.green.shade400,
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
+                        )
+                      else
+                        TextButton.icon(
+                          onPressed: () => _moveToNextRound([appId], fromRound: appCurrentRound),
+                          icon: const Icon(Icons.arrow_forward_rounded, size: 14),
+                          label: Text(
+                            appCurrentRound > activeRound.roundNumber
+                                ? 'Promote (S${appCurrentRound + 1})'
+                                : 'Promote',
+                            style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                          style: TextButton.styleFrom(
+                            foregroundColor: brandTheme.brassPrimary,
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                    ],
+                    SizedBox(
+                      width: 24,
+                      height: 28,
+                      child: PopupMenuButton<String>(
+                        padding: EdgeInsets.zero,
+                        icon: Icon(Icons.more_vert_rounded, size: 18, color: brandTheme.textMuted),
+                        onSelected: (act) => _handleAction(act, app),
+                        itemBuilder: (_) => [
+                        if (status != 'rejected' && status != 'selected' && status != 'offered') ...[
+                          if (appCurrentRound < rounds.length)
+                            PopupMenuItem(
+                              value: 'move',
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.amber),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    appCurrentRound > activeRound.roundNumber
+                                        ? 'Promote to Stage ${appCurrentRound + 1}'
+                                        : 'Move to Next Round',
+                                    style: GoogleFonts.inter(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            PopupMenuItem(
+                              value: 'offer',
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.emoji_events_rounded, size: 16, color: Colors.green),
+                                  const SizedBox(width: 8),
+                                  Text('Offer Selection', style: GoogleFonts.inter(fontSize: 12, color: Colors.green)),
+                                ],
+                              ),
+                            ),
+                        ],
                         PopupMenuItem(
                           value: 'remarks',
                           child: Row(
@@ -847,10 +880,11 @@ class _RoundManagementScreenState
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
+            ],
+          ),
           ],
         ),
       ),
@@ -1275,30 +1309,32 @@ class _RoundManagementScreenState
             // Bottom Action Bar inside Modal
             Row(
               children: [
-                if (!isLastRound && status != 'rejected')
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _moveToNextRound([appId]);
-                      },
-                      icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-                      label: Text('Promote to Round ${activeRound.roundNumber + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      style: FilledButton.styleFrom(backgroundColor: brandTheme.brassPrimary, foregroundColor: brandTheme.onBrass),
+                if (status != 'rejected' && status != 'selected' && status != 'offered') ...[
+                  if (appCurrentRound < rounds.length)
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _moveToNextRound([appId], fromRound: appCurrentRound);
+                        },
+                        icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                        label: Text('Promote to Round ${appCurrentRound + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        style: FilledButton.styleFrom(backgroundColor: brandTheme.brassPrimary, foregroundColor: brandTheme.onBrass),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _offerSelected([appId]);
+                        },
+                        icon: const Icon(Icons.emoji_events_rounded, size: 16),
+                        label: const Text('Offer Selection', style: TextStyle(fontWeight: FontWeight.bold)),
+                        style: FilledButton.styleFrom(backgroundColor: Colors.green.shade600),
+                      ),
                     ),
-                  )
-                else if (isLastRound && status != 'rejected' && status != 'selected')
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _offerSelected([appId]);
-                      },
-                      icon: const Icon(Icons.emoji_events_rounded, size: 16),
-                      label: const Text('Offer Selection', style: TextStyle(fontWeight: FontWeight.bold)),
-                      style: FilledButton.styleFrom(backgroundColor: Colors.green.shade600),
-                    ),
-                  ),
+                ],
                 if (status != 'rejected') ...[
                   const SizedBox(width: 10),
                   OutlinedButton.icon(
@@ -1470,9 +1506,10 @@ class _RoundManagementScreenState
   // Action Handlers
   // ---------------------------------------------------------------------------
   void _handleAction(String action, Map<String, dynamic> app) {
+    final currentRound = app['current_round'] as int? ?? _selectedRoundNumber ?? 1;
     switch (action) {
       case 'move':
-        _moveToNextRound([app['id']]);
+        _moveToNextRound([app['id']], fromRound: currentRound);
         break;
       case 'offer':
         _offerSelected([app['id']]);
@@ -1490,7 +1527,7 @@ class _RoundManagementScreenState
   }
 
   Future<void> _bulkMoveNext() async {
-    await _moveToNextRound(_selectedAppIds.toList());
+    await _moveToNextRound(_selectedAppIds.toList(), fromRound: _selectedRoundNumber);
     setState(() => _selectedAppIds.clear());
   }
 
@@ -1504,18 +1541,32 @@ class _RoundManagementScreenState
     setState(() => _selectedAppIds.clear());
   }
 
-  Future<void> _moveToNextRound(List<String> appIds) async {
+  void _refreshAllRoundData() {
+    ref.invalidate(driveRoundsProvider(widget.drive.id));
+    ref.invalidate(tpoDriveApplicantsProvider(widget.drive.id));
+    ref.invalidate(tpoDriveApplicantCountsProvider);
+    ref.invalidate(studentTimelineProvider);
+    ref.invalidate(studentApplicationsProvider);
+    for (int i = 1; i <= 10; i++) {
+      ref.invalidate(roundStudentsProvider((driveId: widget.drive.id, roundNumber: i)));
+    }
+  }
+
+  Future<void> _moveToNextRound(List<String> appIds, {int? fromRound}) async {
     final repo = ref.read(tpoRepositoryProvider);
     final user = Supabase.instance.client.auth.currentUser;
+    final roundNumberToPromote = fromRound ?? _selectedRoundNumber ?? 1;
     await repo.moveStudentsToNextRound(
       driveId: widget.drive.id,
-      currentRoundNumber: _selectedRoundNumber ?? 1,
+      currentRoundNumber: roundNumberToPromote,
       applicationIds: appIds,
       performedBy: user?.id ?? '',
     );
     if (!mounted) return;
-    ref.invalidate(roundStudentsProvider((driveId: widget.drive.id, roundNumber: _selectedRoundNumber ?? 1)));
-    ref.invalidate(roundStudentsProvider((driveId: widget.drive.id, roundNumber: (_selectedRoundNumber ?? 1) + 1)));
+    setState(() {
+      _selectedAppIds.removeAll(appIds);
+    });
+    _refreshAllRoundData();
 
     // Send notifications & emails
     try {
@@ -1526,7 +1577,7 @@ class _RoundManagementScreenState
             .select('student_id, current_round, student:profiles(email, name)')
             .eq('id', appId)
             .maybeSingle();
-        if (appData != null && (appData['current_round'] as int? ?? 0) == (_selectedRoundNumber ?? 1) + 1) {
+        if (appData != null) {
           final studentId = appData['student_id'] as String?;
           final student = appData['student'] as Map<String, dynamic>?;
           final email = student?['email'] as String?;
@@ -1536,11 +1587,22 @@ class _RoundManagementScreenState
             // Look up real round names from cached data
             final rounds = ref.read(driveRoundsProvider(widget.drive.id)).valueOrNull ?? [];
             final currentRound = rounds.firstWhere(
-              (r) => r.roundNumber == (_selectedRoundNumber ?? 1),
-              orElse: () => rounds.isNotEmpty ? rounds.first : throw Exception('no round'),
+              (r) => r.roundNumber == roundNumberToPromote,
+              orElse: () => rounds.isNotEmpty
+                  ? rounds.first
+                  : DriveRound(
+                      id: '',
+                      driveId: widget.drive.id,
+                      roundNumber: roundNumberToPromote,
+                      roundName: 'Stage $roundNumberToPromote',
+                      createdBy: '',
+                      createdAt: DateTime.now(),
+                    ),
             );
-            final nextRoundIndex = rounds.indexWhere((r) => r.roundNumber == (_selectedRoundNumber ?? 1)) + 1;
-            final nextRoundName = nextRoundIndex < rounds.length ? rounds[nextRoundIndex].roundName : 'Final Selection';
+            final nextRoundIndex = rounds.indexWhere((r) => r.roundNumber == roundNumberToPromote) + 1;
+            final nextRoundName = nextRoundIndex < rounds.length
+                ? rounds[nextRoundIndex].roundName
+                : (rounds.isNotEmpty ? rounds.last.roundName : 'Next Stage');
 
             emailService.sendRoundQualifiedEmail(
               recipientEmail: email,
@@ -1555,7 +1617,7 @@ class _RoundManagementScreenState
             repo.sendNotification(
               userId: studentId,
               title: 'Congratulations! Stage Cleared',
-              body: 'You cleared Stage ${_selectedRoundNumber ?? 1} for ${widget.drive.companyName}!',
+              body: 'You cleared Stage $roundNumberToPromote for ${widget.drive.companyName}!',
               type: 'round_clear',
               driveId: widget.drive.id,
               applicationId: appId,
@@ -1585,7 +1647,7 @@ class _RoundManagementScreenState
     setState(() {
       _selectedAppIds.removeAll(appIds);
     });
-    ref.invalidate(roundStudentsProvider((driveId: widget.drive.id, roundNumber: _selectedRoundNumber ?? 1)));
+    _refreshAllRoundData();
     ref.invalidate(tpoOffersCountProvider);
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1605,7 +1667,11 @@ class _RoundManagementScreenState
       applicationIds: appIds,
       performedBy: user?.id ?? '',
     );
-    ref.invalidate(roundStudentsProvider((driveId: widget.drive.id, roundNumber: _selectedRoundNumber ?? 1)));
+    if (!mounted) return;
+    setState(() {
+      _selectedAppIds.removeAll(appIds);
+    });
+    _refreshAllRoundData();
 
     try {
       final emailService = ref.read(emailNotificationServiceProvider);
@@ -1647,7 +1713,11 @@ class _RoundManagementScreenState
       applicationIds: appIds,
       performedBy: user?.id ?? '',
     );
-    ref.invalidate(roundStudentsProvider((driveId: widget.drive.id, roundNumber: _selectedRoundNumber ?? 1)));
+    if (!mounted) return;
+    setState(() {
+      _selectedAppIds.removeAll(appIds);
+    });
+    _refreshAllRoundData();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

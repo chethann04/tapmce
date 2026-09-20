@@ -825,6 +825,31 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
     );
   }
 
+  Widget _diagRow(String label, String value, {bool isError = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 145,
+            child: Text(label, style: const TextStyle(fontSize: 10.5, color: Colors.white70)),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: isError ? Colors.redAccent : Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showPushTesterDialog(BuildContext context, AppBrandTheme brandTheme) {
     showDialog(
       context: context,
@@ -848,127 +873,225 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
                     child: const Icon(Icons.notifications_active_rounded, color: Color(0xFF8B5CF6), size: 20),
                   ),
                   const SizedBox(width: 10),
-                  Text(
-                    'Push Notification Tester',
-                    style: GoogleFonts.fraunces(fontWeight: FontWeight.w600, fontSize: 18, color: Colors.white),
+                  Expanded(
+                    child: Text(
+                      'Push Notification Tester',
+                      style: GoogleFonts.fraunces(fontWeight: FontWeight.w600, fontSize: 17, color: Colors.white),
+                    ),
                   ),
                 ],
               ),
               content: SizedBox(
-                width: 440,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Trigger a secure FCM test push notification to this device via the Supabase Edge Function pipeline.',
-                      style: GoogleFonts.inter(fontSize: 13, color: Colors.white70),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.black38,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white12),
+                width: 460,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Live FCM push diagnostic & testing suite. Traces pipeline from token to Google FCM HTTP v1.',
+                        style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      const SizedBox(height: 12),
+                      // Phase 18 Diagnostic Grid
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.black26,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: Consumer(
+                          builder: (context, ref, _) {
+                            final push = ref.watch(pushNotificationServiceProvider);
+                            final currentUser = Supabase.instance.client.auth.currentUser;
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('🔍 PIPELINE DIAGNOSTICS', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF8B5CF6))),
+                                const SizedBox(height: 8),
+                                _diagRow('Firebase Initialized:', push.isFirebaseInitialized ? 'YES ✅' : 'NO ❌'),
+                                _diagRow('Notification Permission:', push.permissionStatus.toUpperCase()),
+                                _diagRow('FCM Token Available:', push.currentFcmToken != null ? 'YES (${push.tokenLength} chars)' : 'MISSING ❌'),
+                                _diagRow('Token Prefix:', push.tokenPrefix ?? 'None'),
+                                _diagRow('Token in Supabase DB:', push.isTokenStoredInSupabase ? 'YES ✅' : 'NOT VERIFIED ⚠️'),
+                                _diagRow('Current Auth User:', currentUser != null ? '${currentUser.id.substring(0, 8)}...' : 'NOT LOGGED IN'),
+                                _diagRow('Notification Channel:', push.hasNotificationChannel ? 'EXISTS (high_importance)' : 'CHECKING'),
+                                _diagRow('Last onMessage Received:', push.lastFcmOnMessage ?? 'NEVER'),
+                                if (push.lastFcmError != null)
+                                  _diagRow('Last Error:', push.lastFcmError!, isError: true),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.black38,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Console Log / Response:', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white70)),
+                            const SizedBox(height: 4),
+                            SelectableText(
+                              testStatus,
+                              style: GoogleFonts.ibmPlexMono(fontSize: 10, color: Colors.white60),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.info_outline_rounded, size: 14, color: Color(0xFF8B5CF6)),
-                              const SizedBox(width: 6),
-                              Text('Status / Response:', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
-                            ],
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.white24),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                              ),
+                              onPressed: () async {
+                                final pushService = ref.read(pushNotificationServiceProvider);
+                                setDialogState(() => testStatus = 'Requesting permissions...');
+                                final perm = await pushService.requestPermission();
+                                setDialogState(() => testStatus = 'Permission: ${perm.authorizationStatus.name}');
+                              },
+                              icon: const Icon(Icons.security_rounded, size: 14),
+                              label: const Text('Permission', style: TextStyle(fontSize: 12)),
+                            ),
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            testStatus,
-                            style: GoogleFonts.ibmPlexMono(fontSize: 11, color: Colors.white60),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.white24),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                              ),
+                              onPressed: () async {
+                                final pushService = ref.read(pushNotificationServiceProvider);
+                                setDialogState(() => testStatus = 'Resetting cache & fetching fresh token for tapmce-30c3f...');
+                                final newToken = await pushService.refreshToken();
+                                final inDb = await pushService.checkTokenInDatabase();
+                                setDialogState(() => testStatus = newToken != null
+                                    ? '✅ Fresh Token Acquired!\nToken: ${pushService.tokenPrefix}\nVerified in Supabase DB: $inDb'
+                                    : '❌ Failed to get fresh token: ${pushService.lastFcmError}');
+                              },
+                              icon: const Icon(Icons.sync_rounded, size: 14),
+                              label: const Text('Refresh Token', style: TextStyle(fontSize: 12)),
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              side: const BorderSide(color: Colors.white24),
-                            ),
-                            onPressed: () async {
-                              final pushService = ref.read(pushNotificationServiceProvider);
-                              setDialogState(() => testStatus = 'Requesting permissions...');
-                              final perm = await pushService.requestPermission();
-                              setDialogState(() => testStatus = 'Permission: ${perm.authorizationStatus}');
-                            },
-                            icon: const Icon(Icons.security_rounded, size: 16),
-                            label: const Text('Permission'),
+                      const SizedBox(height: 8),
+                      // Instant OS Notification Banner Test (Direct Hardware Verification)
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF10B981),
+                            side: const BorderSide(color: Color(0xFF10B981)),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              side: const BorderSide(color: Colors.white24),
-                            ),
-                            onPressed: () async {
-                              final pushService = ref.read(pushNotificationServiceProvider);
-                              setDialogState(() => testStatus = 'Fetching & syncing FCM token...');
-                              await pushService.registerDeviceToken();
-                              final token = await pushService.getToken();
-                              final masked = token != null && token.length > 10
-                                  ? '${token.substring(0, 8)}...${token.substring(token.length - 4)}'
-                                  : (token ?? 'Unavailable');
-                              setDialogState(() => testStatus = 'Token Synced: $masked');
-                            },
-                            icon: const Icon(Icons.sync_rounded, size: 16),
-                            label: const Text('Sync Token'),
+                          onPressed: () async {
+                            final pushService = ref.read(pushNotificationServiceProvider);
+                            setDialogState(() => testStatus = 'Triggering local heads-up notification on device...');
+                            await pushService.showLocalNotification(
+                              title: '🚀 MCE Placement Connect [Instant Test]',
+                              body: 'Heads-up notification channel & sound verified on this device!',
+                              payload: 'test_drive_123',
+                            );
+                            setDialogState(() => testStatus = '✅ Heads-up notification sent to Android notification bar!');
+                          },
+                          icon: const Icon(Icons.notifications_active_rounded, size: 16),
+                          label: Text(
+                            'Test OS Notification Banner (Instant) 📱',
+                            style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF8B5CF6),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        onPressed: isTesting
-                            ? null
-                            : () async {
-                                setDialogState(() {
-                                  isTesting = true;
-                                  testStatus = 'Sending test notification payload...';
-                                });
-                                final pushService = ref.read(pushNotificationServiceProvider);
-                                final result = await pushService.sendTestPushNotification();
-                                setDialogState(() {
-                                  isTesting = false;
-                                  if (result['success'] == true) {
-                                    testStatus = '✅ Success! Notification dispatched: ${result['data']}';
-                                  } else {
-                                    testStatus = '⚠️ Error: ${result['error'] ?? result['data']}';
-                                  }
-                                });
-                              },
-                        icon: isTesting
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.send_rounded, size: 16),
-                        label: Text(
-                          isTesting ? 'Dispatching...' : 'Send Test Notification 🔔',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      // Phase 14: Raw Single-Token Push Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF38BDF8),
+                            side: const BorderSide(color: Color(0xFF38BDF8)),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                          onPressed: isTesting
+                              ? null
+                              : () async {
+                                  final pushService = ref.read(pushNotificationServiceProvider);
+                                  final token = await pushService.getToken();
+                                  if (token == null) {
+                                    setDialogState(() => testStatus = '❌ Cannot send raw push: Device token is null.');
+                                    return;
+                                  }
+                                  setDialogState(() {
+                                    isTesting = true;
+                                    testStatus = '⚡ [Phase 14] Dispatching RAW single-token push directly to device token...';
+                                  });
+                                  final res = await pushService.sendRawTokenPushTest(token: token);
+                                  setDialogState(() {
+                                    isTesting = false;
+                                    testStatus = res['success'] == true
+                                        ? '✅ Raw push SUCCESS!\nData: ${res['data']}'
+                                        : '❌ Raw push FAILED: ${res['error'] ?? res['data']}';
+                                  });
+                                },
+                          icon: const Icon(Icons.bolt_rounded, size: 16),
+                          label: Text(
+                            'Phase 14: Send Raw Token Push ⚡',
+                            style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Phase 5: Standard User Push Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF8B5CF6),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 11),
+                          ),
+                          onPressed: isTesting
+                              ? null
+                              : () async {
+                                  setDialogState(() {
+                                    isTesting = true;
+                                    testStatus = 'Dispatching test notification via user ID pipeline...';
+                                  });
+                                  final pushService = ref.read(pushNotificationServiceProvider);
+                                  final result = await pushService.sendTestPushNotification();
+                                  setDialogState(() {
+                                    isTesting = false;
+                                    if (result['success'] == true) {
+                                      testStatus = '✅ Success! Push dispatched: ${result['data']}';
+                                    } else {
+                                      testStatus = '⚠️ Error: ${result['error'] ?? result['data']}';
+                                    }
+                                  });
+                                },
+                          icon: isTesting
+                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.send_rounded, size: 16),
+                          label: Text(
+                            isTesting ? 'Dispatching...' : 'Send Test Notification (User ID) 🔔',
+                            style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               actions: [

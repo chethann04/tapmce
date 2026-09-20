@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "816480739666",
-    "project_id": "placement-connect-61be0",
-    "storage_bucket": "placement-connect-61be0.firebasestorage.app"
+    "project_number": "954847069498",
+    "project_id": "tapmce-30c3f",
+    "storage_bucket": "tapmce-30c3f.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:816480739666:android:ee532780f2d5aa8fcb1a8b",
+        "mobilesdk_app_id": "1:954847069498:android:af4cf1bfe17c5b9f8abc03",
         "android_client_info": {
           "package_name": "com.placementconnect.placement_connect"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyB_GVfKwjt1Y5NRMCFQsH3N_1lCYDjSlr4"
+          "current_key": "AIzaSyCSxs1bL5JCq6JKMIr84qUb7hmjRMIhf00"
         }
       ],
       "services": {

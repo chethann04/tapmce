@@ -73,7 +73,7 @@ class StudentTimelineNotifier extends AsyncNotifier<List<ApplicationTimelineData
     _channel = Supabase.instance.client
         .channel('student_timeline_${user.id}')
         .onPostgresChanges(
-          event: PostgresChangeEvent.update,
+          event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'applications',
           filter: PostgresChangeFilter(
@@ -82,25 +82,16 @@ class StudentTimelineNotifier extends AsyncNotifier<List<ApplicationTimelineData
             value: user.id,
           ),
           callback: (_) {
-            // Re-fetch when any application row is updated (e.g. current_round changes)
+            // Re-fetch when any application row is inserted, updated, or deleted
             ref.invalidateSelf();
           },
         )
         .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
+          event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'application_round_status',
           callback: (_) {
-            // Re-fetch when a new round_status is inserted (e.g. round cleared)
-            ref.invalidateSelf();
-          },
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'application_round_status',
-          callback: (_) {
-            // Re-fetch when round_status is updated (e.g. result changes)
+            // Re-fetch when round_status changes
             ref.invalidateSelf();
           },
         )

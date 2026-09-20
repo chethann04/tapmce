@@ -603,12 +603,7 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
 
     return GestureDetector(
       onTap: () {
-        if (isApplied) {
-          // Navigate to Timeline tab (index 2)
-          ref.read(studentDashboardTabProvider.notifier).state = 2;
-        } else {
-          context.push('/student/drive-details', extra: drive);
-        }
+        context.push('/student/drive/${drive.id}', extra: drive);
       },
       child: Container(
         width: 220,
@@ -1088,12 +1083,7 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
 
     return GestureDetector(
       onTap: () {
-        if (isApplied) {
-          // Navigate to Timeline tab (index 2) to see application status
-          ref.read(studentDashboardTabProvider.notifier).state = 2;
-        } else {
-          context.push('/student/drive-details', extra: drive);
-        }
+        context.push('/student/drive/${drive.id}', extra: drive);
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: AppSpacing.sp3),

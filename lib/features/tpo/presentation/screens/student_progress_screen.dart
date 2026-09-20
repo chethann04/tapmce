@@ -199,7 +199,7 @@ class StudentProgressScreen extends ConsumerWidget {
           final remarks = roundProgress['remarks'] as String?;
 
           final isLast = index == rounds.length - 1;
-          final isCompleted = attended || result == 'selected' || result == 'passed';
+          final isCompleted = attended || result == 'selected' || result == 'passed' || result == 'cleared';
           final isFailed = result == 'rejected' || result == 'failed' || result == 'not_selected';
 
           return Row(
@@ -334,7 +334,9 @@ class StudentProgressScreen extends ConsumerWidget {
 
   Widget _roundResultChip(String result, AppBrandTheme brandTheme) {
     final (color, label, icon) = switch (result.toLowerCase()) {
-      'selected' || 'passed' => (brandTheme.statusShortlisted, 'Passed', Icons.check_circle_rounded),
+      'cleared' => (brandTheme.statusShortlisted, 'Cleared', Icons.check_circle_rounded),
+      'selected' => (brandTheme.statusShortlisted, 'Selected', Icons.check_circle_rounded),
+      'passed' => (brandTheme.statusShortlisted, 'Passed', Icons.check_circle_rounded),
       'rejected' || 'failed' || 'not_selected' => (brandTheme.statusRejected, 'Failed', Icons.cancel_rounded),
       _ => (brandTheme.statusPending, 'Pending', Icons.schedule_rounded),
     };

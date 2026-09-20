@@ -65,8 +65,9 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserProfile?>> {
     if (user != null) {
       _loadProfile(user.id);
       _subscribeToProfileChanges(user.id);
-      _pushService?.initialize();
-      _pushService?.registerDeviceToken();
+      _pushService?.initialize().then((_) {
+        _pushService?.registerDeviceToken();
+      });
       _pushService?.listenToRealtimeNotifications(user.id);
     } else {
       state = const AsyncValue.data(null);
@@ -166,9 +167,11 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserProfile?>> {
         // Register FCM Push Token for logged in user safely
         try {
           await _pushService?.initialize();
-          _pushService?.registerDeviceToken();
+          await _pushService?.registerDeviceToken();
           _pushService?.listenToRealtimeNotifications(userId);
-        } catch (_) {}
+        } catch (pushErr) {
+          debugPrint('[AuthNotifier] Push registration notice: $pushErr');
+        }
       } else {
         state = const AsyncValue.data(null);
       }
@@ -239,6 +242,13 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserProfile?>> {
             await _datasource.markEmailVerified(authRes.user!.id);
             _subscribeToProfileChanges(authRes.user!.id);
             await _loadProfile(authRes.user!.id);
+            try {
+              await _pushService?.initialize();
+              await _pushService?.registerDeviceToken();
+              _pushService?.listenToRealtimeNotifications(authRes.user!.id);
+            } catch (pushErr) {
+              debugPrint('[AuthNotifier] Push registration notice: $pushErr');
+            }
             _pendingOtpEmail = null;
             _pendingPassword = null;
             _lastOtpError = null;
@@ -366,8 +376,9 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserProfile?>> {
 
   void refreshProfile(String userId) {
     _loadProfile(userId);
-    _pushService?.initialize();
+    _pushService?.initialize().then((_) {
       _pushService?.registerDeviceToken();
+    });
   }
 }
 

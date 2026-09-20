@@ -275,70 +275,64 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
               final applicantsCount = applicantsAsync.valueOrNull ?? 0;
               final offersCount = offersAsync.valueOrNull ?? 0;
 
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Bento Primary Tile (B1 - 1.3fr) -> Jump to Drives Tab
-                  Expanded(
-                    flex: 13,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(AppShapes.radiusHero),
-                      onTap: () => ref.read(tpoDashboardTabProvider.notifier).state = 1,
-                      child: Container(
-                        constraints: const BoxConstraints(minHeight: 160),
-                        padding: const EdgeInsets.all(AppSpacing.sp5),
-                        decoration: ShapeDecoration(
-                          color: theme.colorScheme.surface,
-                          shape: ContinuousRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppShapes.radiusHero),
-                            side: BorderSide(color: brandTheme.cardBorder),
-                          ),
-                          shadows: brandTheme.shadow2,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '$activeDrivesCount',
-                                  style: GoogleFonts.fraunces(
-                                    fontSize: 36,
-                                    fontWeight: FontWeight.w600,
-                                    color: brandTheme.brassPrimary,
-                                    height: 1.0,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Text(
-                                      'Active Drives',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 12,
-                                        color: brandTheme.textMuted,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Icon(Icons.arrow_forward_rounded, size: 12, color: brandTheme.brassPrimary),
-                                  ],
-                                ),
-                              ],
+              return IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Bento Primary Tile (B1 - 1.3fr) -> Jump to Drives Tab
+                    Expanded(
+                      flex: 13,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(AppShapes.radiusHero),
+                        onTap: () => ref.read(tpoDashboardTabProvider.notifier).state = 1,
+                        child: Container(
+                          constraints: const BoxConstraints(minHeight: 170),
+                          padding: const EdgeInsets.all(AppSpacing.sp5),
+                          decoration: ShapeDecoration(
+                            color: theme.colorScheme.surface,
+                            shape: ContinuousRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppShapes.radiusHero),
+                              side: BorderSide(color: brandTheme.cardBorder),
                             ),
-                          ],
+                            shadows: brandTheme.shadow2,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                '$activeDrivesCount',
+                                style: GoogleFonts.fraunces(
+                                  fontSize: 36,
+                                  fontWeight: FontWeight.w600,
+                                  color: brandTheme.brassPrimary,
+                                  height: 1.0,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Text(
+                                    'Active Drives',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: brandTheme.textMuted,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(Icons.arrow_forward_rounded, size: 12, color: brandTheme.brassPrimary),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.sp3),
+                    const SizedBox(width: AppSpacing.sp3),
 
-                  // Bento Secondary Stat Tiles (B2 & B3 - 1.0fr Stack)
-                  Expanded(
-                    flex: 10,
-                    child: SizedBox(
-                      height: 160,
+                    // Bento Secondary Stat Tiles (B2 & B3 - 1.0fr Stack)
+                    Expanded(
+                      flex: 10,
                       child: Column(
                         children: [
                           Expanded(
@@ -347,7 +341,7 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                               onTap: () => ref.read(tpoDashboardTabProvider.notifier).state = 1,
                               child: Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.all(AppSpacing.sp3),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                 decoration: ShapeDecoration(
                                   color: theme.colorScheme.surface,
                                   shape: ContinuousRectangleBorder(
@@ -365,13 +359,16 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                                         fontSize: 22,
                                         fontWeight: FontWeight.w600,
                                         color: theme.colorScheme.onSurface,
+                                        height: 1.1,
                                       ),
                                     ),
+                                    const SizedBox(height: 2),
                                     Text(
                                       'Applicants',
                                       style: GoogleFonts.inter(
                                         fontSize: 11,
                                         color: brandTheme.textMuted,
+                                        height: 1.1,
                                       ),
                                     ),
                                   ],
@@ -386,7 +383,7 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                               onTap: () => ref.read(tpoDashboardTabProvider.notifier).state = 3,
                               child: Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.all(AppSpacing.sp3),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                 decoration: ShapeDecoration(
                                   color: theme.colorScheme.surface,
                                   shape: ContinuousRectangleBorder(
@@ -404,8 +401,10 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                                         fontSize: 22,
                                         fontWeight: FontWeight.w600,
                                         color: brandTheme.statusShortlisted,
+                                        height: 1.1,
                                       ),
                                     ),
+                                    const SizedBox(height: 2),
                                     Row(
                                       children: [
                                         Text(
@@ -413,6 +412,7 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                                           style: GoogleFonts.inter(
                                             fontSize: 11,
                                             color: brandTheme.textMuted,
+                                            height: 1.1,
                                           ),
                                         ),
                                         const SizedBox(width: 4),
@@ -427,8 +427,8 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                         ],
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               );
             },
             loading: () => const SkeletonCardRow(),
@@ -1464,6 +1464,7 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
   }
 
   void _showApplicantsSheet(Drive drive, AppBrandTheme brandTheme, ThemeData theme) {
+    ref.invalidate(tpoDriveApplicantsProvider(drive.id));
     String searchQuery = '';
     showModalBottomSheet(
       context: context,
@@ -1564,13 +1565,25 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                         child: applicantsAsync.when(
                           data: (applicants) {
                             if (applicants.isEmpty) {
-                              return Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
+                              return RefreshIndicator(
+                                onRefresh: () async {
+                                  ref.invalidate(tpoDriveApplicantsProvider(drive.id));
+                                  await ref.read(tpoDriveApplicantsProvider(drive.id).future);
+                                },
+                                child: ListView(
+                                  physics: const AlwaysScrollableScrollPhysics(),
                                   children: [
-                                    Icon(Icons.people_outline_rounded, size: 40, color: brandTheme.textMuted),
-                                    const SizedBox(height: 12),
-                                    Text('No applications yet', style: GoogleFonts.inter(fontSize: 14, color: brandTheme.textMuted)),
+                                    SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+                                    Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.people_outline_rounded, size: 40, color: brandTheme.textMuted),
+                                          const SizedBox(height: 12),
+                                          Text('No applications yet', style: GoogleFonts.inter(fontSize: 14, color: brandTheme.textMuted)),
+                                        ],
+                                      ),
+                                    ),
                                   ],
                                 ),
                               );
@@ -1588,26 +1601,44 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                             }).toList();
 
                             if (filtered.isEmpty) {
-                              return Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
+                              return RefreshIndicator(
+                                onRefresh: () async {
+                                  ref.invalidate(tpoDriveApplicantsProvider(drive.id));
+                                  await ref.read(tpoDriveApplicantsProvider(drive.id).future);
+                                },
+                                child: ListView(
+                                  physics: const AlwaysScrollableScrollPhysics(),
                                   children: [
-                                    Icon(Icons.search_off_rounded, size: 36, color: brandTheme.textMuted),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'No matching applicants found',
-                                      style: GoogleFonts.inter(fontSize: 13, color: brandTheme.textMuted),
+                                    SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+                                    Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.search_off_rounded, size: 36, color: brandTheme.textMuted),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            'No matching applicants found',
+                                            style: GoogleFonts.inter(fontSize: 13, color: brandTheme.textMuted),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ],
                                 ),
                               );
                             }
 
-                            return ListView.separated(
-                              controller: scrollController,
-                              itemCount: filtered.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 8),
-                              itemBuilder: (_, i) {
+                            return RefreshIndicator(
+                              onRefresh: () async {
+                                ref.invalidate(tpoDriveApplicantsProvider(drive.id));
+                                await ref.read(tpoDriveApplicantsProvider(drive.id).future);
+                              },
+                              child: ListView.separated(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                controller: scrollController,
+                                itemCount: filtered.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                                itemBuilder: (_, i) {
                                 final app = filtered[i];
                                 final student = app['student'] as Map<String, dynamic>? ?? {};
                                 final name = student['name'] as String? ?? 'Student';
@@ -1720,8 +1751,9 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                                   ),
                                 );
                               },
-                            );
-                          },
+                            ),
+                          );
+                        },
                           loading: () => const Center(child: CircularProgressIndicator()),
                           error: (e, _) => Center(
                             child: Text('Error loading applicants: $e', style: GoogleFonts.inter(fontSize: 13)),

@@ -61,6 +61,22 @@ final tpoOffersCountProvider = FutureProvider<int>((ref) async {
 
 /// Applicant count per drive - returns Map<driveId, count>.
 final tpoDriveApplicantCountsProvider = FutureProvider<Map<String, int>>((ref) async {
+  final channel = Supabase.instance.client
+      .channel('tpo_applicant_counts_${DateTime.now().millisecondsSinceEpoch}')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'applications',
+        callback: (payload) {
+          ref.invalidateSelf();
+        },
+      )
+      .subscribe();
+
+  ref.onDispose(() {
+    Supabase.instance.client.removeChannel(channel);
+  });
+
   try {
     final response = await Supabase.instance.client
         .from('applications')
@@ -81,6 +97,27 @@ final tpoDriveApplicantCountsProvider = FutureProvider<Map<String, int>>((ref) a
 
 /// List of students who applied to a specific drive.
 final tpoDriveApplicantsProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, driveId) async {
+  final channel = Supabase.instance.client
+      .channel('tpo_applicants_${driveId}_${DateTime.now().millisecondsSinceEpoch}')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'applications',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'drive_id',
+          value: driveId,
+        ),
+        callback: (payload) {
+          ref.invalidateSelf();
+        },
+      )
+      .subscribe();
+
+  ref.onDispose(() {
+    Supabase.instance.client.removeChannel(channel);
+  });
+
   final response = await Supabase.instance.client
       .from('applications')
       .select('id, status, applied_at, student_id, student:profiles!applications_student_id_fkey(name, email, usn, department, cgpa, semester)')
@@ -98,12 +135,62 @@ final driveRoundsProvider = FutureProvider.family<List<DriveRound>, String>((ref
 
 /// Students in a specific round of a drive.
 final roundStudentsProvider = FutureProvider.family<List<Map<String, dynamic>>, ({String driveId, int roundNumber})>((ref, params) async {
+  final channel = Supabase.instance.client
+      .channel('round_students_${params.driveId}_${params.roundNumber}_${DateTime.now().millisecondsSinceEpoch}')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'application_round_status',
+        callback: (payload) {
+          ref.invalidateSelf();
+        },
+      )
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'applications',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'drive_id',
+          value: params.driveId,
+        ),
+        callback: (payload) {
+          ref.invalidateSelf();
+        },
+      )
+      .subscribe();
+
+  ref.onDispose(() {
+    Supabase.instance.client.removeChannel(channel);
+  });
+
   final repo = ref.watch(tpoRepositoryProvider);
   return repo.getRoundStudents(driveId: params.driveId, roundNumber: params.roundNumber);
 });
 
 /// Student's round progress for a specific application.
 final studentRoundProgressProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, applicationId) async {
+  final channel = Supabase.instance.client
+      .channel('student_round_progress_${applicationId}_${DateTime.now().millisecondsSinceEpoch}')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'application_round_status',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'application_id',
+          value: applicationId,
+        ),
+        callback: (payload) {
+          ref.invalidateSelf();
+        },
+      )
+      .subscribe();
+
+  ref.onDispose(() {
+    Supabase.instance.client.removeChannel(channel);
+  });
+
   final repo = ref.watch(tpoRepositoryProvider);
   return repo.getStudentRoundProgress(applicationId);
 });

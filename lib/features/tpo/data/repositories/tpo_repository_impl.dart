@@ -299,6 +299,19 @@ class TpoRepositoryImpl implements TpoRepository {
                 }
               }
 
+              for (final sid in studentIds) {
+                try {
+                  await _supabase.from('notifications').upsert({
+                    'user_id': sid,
+                    'title': 'Drive Activated: $companyName',
+                    'body': '$companyName - $roleTitle applications are now open. Apply before the deadline!',
+                    'type': 'info',
+                    'drive_id': driveId,
+                    'idempotency_key': 'drive:$driveId:status:$validStatus',
+                  }, onConflict: 'user_id,idempotency_key');
+                } catch (_) {}
+              }
+
               if (studentIds.isNotEmpty) {
                 try {
                   await _supabase.functions.invoke('send-fcm-push', body: {
@@ -306,6 +319,7 @@ class TpoRepositoryImpl implements TpoRepository {
                     'drive_id': driveId,
                     'title': 'Drive Activated',
                     'body': '$companyName - $roleTitle applications are now open. Apply before the deadline!',
+                    'skip_in_app': true,
                   });
                 } catch (_) {}
               }
@@ -331,6 +345,19 @@ class TpoRepositoryImpl implements TpoRepository {
                 }
               }
 
+              for (final sid in studentIds) {
+                try {
+                  await _supabase.from('notifications').upsert({
+                    'user_id': sid,
+                    'title': 'Drive Cancelled: $companyName',
+                    'body': 'The drive for $companyName - $roleTitle has been cancelled by TPO.',
+                    'type': 'warning',
+                    'drive_id': driveId,
+                    'idempotency_key': 'drive:$driveId:status:cancelled',
+                  }, onConflict: 'user_id,idempotency_key');
+                } catch (_) {}
+              }
+
               if (studentIds.isNotEmpty) {
                 try {
                   await _supabase.functions.invoke('send-fcm-push', body: {
@@ -338,6 +365,44 @@ class TpoRepositoryImpl implements TpoRepository {
                     'drive_id': driveId,
                     'title': 'Drive Cancelled',
                     'body': 'The drive for $companyName - $roleTitle has been cancelled by TPO.',
+                    'skip_in_app': true,
+                  });
+                } catch (_) {}
+              }
+            } else if (validStatus == 'completed' || validStatus == 'closed') {
+              // Notify applicants that drive has concluded / closed
+              final apps = await _supabase
+                  .from('applications')
+                  .select('student_id')
+                  .eq('drive_id', driveId);
+
+              final studentIds = <String>[];
+              for (final a in (apps as List)) {
+                final sid = a['student_id'] as String?;
+                if (sid != null && sid.isNotEmpty) studentIds.add(sid);
+              }
+
+              for (final sid in studentIds) {
+                try {
+                  await _supabase.from('notifications').upsert({
+                    'user_id': sid,
+                    'title': 'Drive Closed: $companyName',
+                    'body': 'Applications for $companyName - $roleTitle are now closed.',
+                    'type': 'info',
+                    'drive_id': driveId,
+                    'idempotency_key': 'drive:$driveId:status:$validStatus',
+                  }, onConflict: 'user_id,idempotency_key');
+                } catch (_) {}
+              }
+
+              if (studentIds.isNotEmpty) {
+                try {
+                  await _supabase.functions.invoke('send-fcm-push', body: {
+                    'user_ids': studentIds,
+                    'drive_id': driveId,
+                    'title': 'Drive Closed',
+                    'body': 'Applications for $companyName - $roleTitle are now closed.',
+                    'skip_in_app': true,
                   });
                 } catch (_) {}
               }
@@ -631,47 +696,6 @@ class TpoRepositoryImpl implements TpoRepository {
         .select('application_id, result, attended, updated_at')
         .eq('round_id', roundId);
 
-        if ((statusRows as List).isEmpty) {
-      final appsResponse = await _supabase
-          .from('applications')
-          .select('id, status, applied_at, student_id, current_round, student:profiles!applications_student_id_fkey(name, email, usn, department, cgpa, semester, photo_url)')
-          .eq('drive_id', driveId)
-          .order('applied_at', ascending: false);
-
-      List<dynamic> attendanceResponse = [];
-      try {
-        attendanceResponse = await _supabase
-            .from('drive_attendance')
-            .select('student_id, scanned_at, status')
-            .eq('drive_id', driveId);
-      } catch (_) {}
-
-      final attendedMap = <String, Map<String, dynamic>>{};
-      for (final a in attendanceResponse) {
-        if (a is Map<String, dynamic>) {
-          attendedMap[a['student_id'] as String] = a;
-        }
-      }
-
-      final results = <Map<String, dynamic>>[];
-      for (final app in (appsResponse as List)) {
-        final sid = app['student_id'] as String;
-        final appRound = app['current_round'] as int? ?? 1;
-        if (roundNumber > 1 && appRound < roundNumber) continue;
-
-        final att = attendedMap[sid];
-        results.add({
-          ...app as Map<String, dynamic>,
-          'round_result': 'pending',
-          'attended': att != null,
-          'attended_at': att?['scanned_at'],
-          'attendance_status': att?['status'] ?? (att != null ? 'present' : null),
-        });
-      }
-      return results;
-    }
-
-    // Step 3: Collect application IDs
     final appIds = (statusRows as List).map((r) => r['application_id'] as String).toList();
     final resultMap = <String, Map<String, dynamic>>{};
     for (final r in statusRows) {
@@ -682,26 +706,94 @@ class TpoRepositoryImpl implements TpoRepository {
       };
     }
 
-    // Step 4: Fetch full application + student info for those IDs
-    final appsResponse = await _supabase
-        .from('applications')
-        .select(
-            'id, status, applied_at, student_id, current_round, '
-            'student:profiles!applications_student_id_fkey(name, email, usn, department, cgpa, semester, photo_url)')
-        .inFilter('id', appIds)
-        .order('applied_at', ascending: false);
+    // Step 3: Fetch applications
+    // For Round 1: ALL applications for this drive must be present
+    // For Round > 1: All applications with round status records OR current_round >= roundNumber
+    final List<dynamic> appsResponse;
+    if (roundNumber == 1) {
+      appsResponse = await _supabase
+          .from('applications')
+          .select(
+              'id, status, applied_at, student_id, current_round, '
+              'student:profiles!applications_student_id_fkey(name, email, usn, department, cgpa, semester, photo_url)')
+          .eq('drive_id', driveId)
+          .order('applied_at', ascending: false);
+    } else {
+      final eligibleAppIds = {...appIds};
+      try {
+        final higherRoundApps = await _supabase
+            .from('applications')
+            .select('id')
+            .eq('drive_id', driveId)
+            .gte('current_round', roundNumber);
+        for (final row in higherRoundApps as List) {
+          final id = row['id'] as String?;
+          if (id != null) eligibleAppIds.add(id);
+        }
+      } catch (_) {}
 
-    // Step 5: Merge — attach the per-stage result to each application row
+      if (eligibleAppIds.isEmpty) return [];
+
+      appsResponse = await _supabase
+          .from('applications')
+          .select(
+              'id, status, applied_at, student_id, current_round, '
+              'student:profiles!applications_student_id_fkey(name, email, usn, department, cgpa, semester, photo_url)')
+          .inFilter('id', eligibleAppIds.toList())
+          .order('applied_at', ascending: false);
+    }
+
+    // Optional attendance lookup
+    List<dynamic> attendanceResponse = [];
+    try {
+      attendanceResponse = await _supabase
+          .from('drive_attendance')
+          .select('student_id, scanned_at, status')
+          .eq('drive_id', driveId);
+    } catch (_) {}
+
+    final attendedMap = <String, Map<String, dynamic>>{};
+    for (final a in attendanceResponse) {
+      if (a is Map<String, dynamic>) {
+        attendedMap[a['student_id'] as String] = a;
+      }
+    }
+
+    // Step 4: Merge — attach the per-stage result to each application row
     final results = <Map<String, dynamic>>[];
-    for (final app in appsResponse as List) {
+    for (final app in appsResponse) {
       final appId = app['id'] as String;
-      final stageInfo = resultMap[appId] ?? {};
+      final sid = app['student_id'] as String;
+      final stageInfo = resultMap[appId];
+      final appCurrentRound = app['current_round'] as int? ?? 1;
+      final att = attendedMap[sid];
+
+      String roundResult = stageInfo?['round_result'] ?? 'pending';
+      bool attended = stageInfo?['attended'] ?? (att != null);
+      dynamic attendedAt = stageInfo?['round_updated_at'] ?? att?['scanned_at'];
+
+      // If student is already past this round, they must have cleared it
+      if (appCurrentRound > roundNumber && roundResult == 'pending') {
+        roundResult = 'cleared';
+        attended = true;
+      }
+
+      // Self-heal: ensure application_round_status exists for this round in DB
+      if (stageInfo == null) {
+        _supabase.from('application_round_status').upsert({
+          'application_id': appId,
+          'round_id': roundId,
+          'result': roundResult,
+          'attended': attended,
+        }, onConflict: 'application_id,round_id').ignore();
+      }
+
       results.add({
         ...app as Map<String, dynamic>,
-        'round_result': stageInfo['round_result'] ?? 'pending',
-        'attended': stageInfo['attended'] ?? false,
-        'attended_at': stageInfo['round_updated_at'],
-        'attendance_status': (stageInfo['attended'] == true) ? 'present' : null,
+        'round_result': roundResult,
+        'attended': attended,
+        'attended_at': attendedAt,
+        'attendance_status': att?['status'] ?? (attended ? 'present' : null),
       });
     }
     return results;
@@ -714,8 +806,6 @@ class TpoRepositoryImpl implements TpoRepository {
     required List<String> applicationIds,
     required String performedBy,
   }) async {
-    final nextRound = currentRoundNumber + 1;
-
     for (final appId in applicationIds) {
       // Get application details to check current round
       final appData = await _supabase
@@ -728,19 +818,18 @@ class TpoRepositoryImpl implements TpoRepository {
       final studentId = appData['student_id'] as String? ?? '';
       final appCurrentRound = appData['current_round'] as int? ?? 1;
 
-      // PREVENT DUPLICATE PROMOTION:
-      // If student is already past currentRoundNumber, do not promote again.
-      if (appCurrentRound != currentRoundNumber) {
-        continue;
-      }
+      // Determine effective round to promote from:
+      // If student is at or ahead of currentRoundNumber, promote from their current round!
+      final fromRound = appCurrentRound >= currentRoundNumber ? appCurrentRound : currentRoundNumber;
+      final nextRound = fromRound + 1;
 
       // AUTOMATIC PREREQUISITE STAGE COMPLETION:
-      // Mark current and all previous rounds (<= currentRoundNumber) as completed/cleared
+      // Mark fromRound and all previous rounds (<= fromRound) as completed/cleared
       final prevRounds = await _supabase
           .from('drive_rounds')
           .select('id, round_number')
           .eq('drive_id', driveId)
-          .lte('round_number', currentRoundNumber);
+          .lte('round_number', fromRound);
 
       for (final r in prevRounds) {
         await _supabase.from('application_round_status').upsert({
@@ -748,21 +837,10 @@ class TpoRepositoryImpl implements TpoRepository {
           'round_id': r['id'],
           'attended': true,
           'result': 'cleared',
-          
         }, onConflict: 'application_id,round_id');
       }
 
-      // Update current_round and status on the application
-      await _supabase
-          .from('applications')
-          .update({
-            'current_round': nextRound,
-            'status': 'shortlisted',
-            
-          })
-          .eq('id', appId);
-
-      // Get the round_id for the next round
+      // Check if next round exists
       final nextRoundData = await _supabase
           .from('drive_rounds')
           .select('id')
@@ -771,20 +849,36 @@ class TpoRepositoryImpl implements TpoRepository {
           .maybeSingle();
 
       if (nextRoundData != null) {
+        // Update current_round and status on the application
+        await _supabase
+            .from('applications')
+            .update({
+              'current_round': nextRound,
+              'status': 'shortlisted',
+            })
+            .eq('id', appId);
+
         // Create application_round_status for the next round
         await _supabase.from('application_round_status').upsert({
           'application_id': appId,
           'round_id': nextRoundData['id'],
           'result': 'pending',
-          
         }, onConflict: 'application_id,round_id');
+      } else {
+        // Reached end of pipeline: mark as selected/offered!
+        await _supabase
+            .from('applications')
+            .update({
+              'status': 'selected',
+            })
+            .eq('id', appId);
       }
 
       // Log audit
       try {
         await _auditLogRepo.logAction(
           action: AuditAction.other,
-          description: 'Student moved from round $currentRoundNumber to round $nextRound',
+          description: 'Student moved from round $fromRound to round $nextRound',
           targetId: appId,
           targetTable: 'applications',
         );
@@ -793,8 +887,10 @@ class TpoRepositoryImpl implements TpoRepository {
       // Send notification to student
       await sendNotification(
         userId: studentId,
-        title: 'Round Progress Update',
-        body: 'Congratulations! You have been promoted to Round $nextRound. Please check the round details.',
+        title: nextRoundData != null ? 'Round Progress Update' : 'Congratulations! Job Offer',
+        body: nextRoundData != null
+            ? 'Congratulations! You have been promoted to Round $nextRound.'
+            : 'Congratulations! You have cleared all rounds and received a job offer!',
         type: 'success',
         driveId: driveId,
         applicationId: appId,
@@ -869,12 +965,11 @@ class TpoRepositoryImpl implements TpoRepository {
           .update({'status': 'selected'})
           .eq('id', appId);
 
-      // Mark all rounds up to currentRoundNumber as cleared/attended in application_round_status
+      // Mark all rounds of this drive as cleared/attended in application_round_status
       final allRounds = await _supabase
           .from('drive_rounds')
           .select('id, round_number')
-          .eq('drive_id', driveId)
-          .lte('round_number', currentRoundNumber);
+          .eq('drive_id', driveId);
 
       for (final r in (allRounds as List)) {
         await _supabase.from('application_round_status').upsert({

@@ -25,6 +25,28 @@ final studentApplicationsProvider = FutureProvider<List<Application>>((ref) asyn
   final userId = Supabase.instance.client.auth.currentUser?.id ?? authProfile?.id;
   if (userId == null || userId.isEmpty) return [];
 
+  // Realtime subscription: updates student applications on insert/update/delete immediately
+  final channel = Supabase.instance.client
+      .channel('student_apps_$userId')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'applications',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'student_id',
+          value: userId,
+        ),
+        callback: (_) {
+          ref.invalidateSelf();
+        },
+      )
+      .subscribe();
+
+  ref.onDispose(() {
+    channel.unsubscribe();
+  });
+
   try {
     final response = await Supabase.instance.client
         .from('applications')
@@ -33,7 +55,15 @@ final studentApplicationsProvider = FutureProvider<List<Application>>((ref) asyn
 
     return (response as List).map((map) => Application.fromMap(map)).toList();
   } catch (e) {
-    return [];
+    try {
+      final rawResponse = await Supabase.instance.client
+          .from('applications')
+          .select()
+          .eq('student_id', userId);
+      return (rawResponse as List).map((map) => Application.fromMap(map)).toList();
+    } catch (_) {
+      return [];
+    }
   }
 });
 

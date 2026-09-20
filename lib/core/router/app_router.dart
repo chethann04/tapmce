@@ -332,11 +332,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/student/drive-details',
         name: 'student-drive-details',
         pageBuilder: (context, state) {
-          final drive = state.extra as Drive;
+          final drive = state.extra is Drive ? state.extra as Drive : null;
+          final driveId = state.uri.queryParameters['id'] ?? state.uri.queryParameters['drive_id'];
           return buildAppPageTransition(
             context: context,
             state: state,
-            child: DriveDetailsScreen(drive: drive),
+            child: DriveDetailsScreen(drive: drive, driveId: driveId),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/student/drive/:id',
+        name: 'student-drive-by-id',
+        pageBuilder: (context, state) {
+          final driveId = state.pathParameters['id'];
+          final drive = state.extra is Drive ? state.extra as Drive : null;
+          return buildAppPageTransition(
+            context: context,
+            state: state,
+            child: DriveDetailsScreen(drive: drive, driveId: driveId),
           );
         },
       ),
