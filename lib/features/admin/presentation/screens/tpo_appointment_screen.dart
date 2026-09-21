@@ -181,7 +181,7 @@ class _TpoAppointmentScreenState extends ConsumerState<TpoAppointmentScreen> {
                       }
 
                       return DropdownButtonFormField<Map<String, dynamic>>(
-                        value: _selectedFaculty,
+                        initialValue: _selectedFaculty,
                         isExpanded: true,
                         hint: Text('Choose a faculty member…',
                             style: GoogleFonts.inter(fontSize: 13, color: brandTheme?.textMuted)),

@@ -42,10 +42,10 @@ class AdminDashboardScreen extends ConsumerWidget {
       ),
       body: profileAsync.when(
         data: (profile) => _body(context, ref, profile?.fullName ?? 'Admin', brandTheme, theme),
-        loading: () => Padding(
-          padding: const EdgeInsets.all(AppSpacing.sp5),
+        loading: () => const Padding(
+          padding: EdgeInsets.all(AppSpacing.sp5),
           child: Column(
-            children: const [
+            children: [
               SkeletonCardRow(),
               SkeletonCardRow(),
             ],

@@ -207,7 +207,7 @@ class _CourseManagementScreenState
           ),
           Switch(
             value: course.isActive,
-            activeColor: brandTheme.brassPrimary,
+            activeThumbColor: brandTheme.brassPrimary,
             onChanged: (val) async {
               await ref.read(courseDatasourceProvider).toggleCourseStatus(course.id, val);
               ref.invalidate(coursesProvider);

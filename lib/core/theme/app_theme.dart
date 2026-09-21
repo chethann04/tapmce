@@ -8,7 +8,7 @@ class AppTheme {
   AppTheme._();
 
   // ── Light Theme Tokens ──────────────────────────────────────────────────
-  static final lightBrandTheme = AppBrandTheme(
+  static const lightBrandTheme = AppBrandTheme(
     brassPrimary: AppColors.lightBrass,
     brassSoft: AppColors.lightBrassSoft,
     brassA: AppColors.lightBrassA,
@@ -74,7 +74,7 @@ class AppTheme {
       dividerColor: AppColors.lightDivider,
       scaffoldBackgroundColor: AppColors.lightBg,
       textTheme: textTheme,
-      extensions: [lightBrandTheme],
+      extensions: const [lightBrandTheme],
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.lightSurface1,
         foregroundColor: AppColors.lightInk,
@@ -120,7 +120,7 @@ class AppTheme {
   }
 
   // ── Dark Theme Tokens (Pure OLED #000000) ────────────────────────────────
-  static final darkBrandTheme = AppBrandTheme(
+  static const darkBrandTheme = AppBrandTheme(
     brassPrimary: AppColors.darkBrass,
     brassSoft: AppColors.darkBrassSoft,
     brassA: AppColors.darkBrassA,
@@ -186,7 +186,7 @@ class AppTheme {
       dividerColor: AppColors.darkDivider,
       scaffoldBackgroundColor: AppColors.darkBg, // Pure OLED Black #000000
       textTheme: textTheme,
-      extensions: [darkBrandTheme],
+      extensions: const [darkBrandTheme],
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.darkBg,
         foregroundColor: AppColors.darkInk,

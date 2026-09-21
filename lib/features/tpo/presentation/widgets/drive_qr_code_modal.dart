@@ -356,9 +356,9 @@ class _DriveQrCodeModalState extends ConsumerState<DriveQrCodeModal>
                                 onPressed: () {
                                   if (records.isEmpty) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
+                                      const SnackBar(
                                         content: Row(
-                                          children: const [
+                                          children: [
                                             Icon(Icons.warning_amber_rounded, color: Colors.amberAccent, size: 20),
                                             SizedBox(width: 10),
                                             Expanded(
@@ -369,9 +369,9 @@ class _DriveQrCodeModalState extends ConsumerState<DriveQrCodeModal>
                                             ),
                                           ],
                                         ),
-                                        backgroundColor: const Color(0xFF23242A),
+                                        backgroundColor: Color(0xFF23242A),
                                         behavior: SnackBarBehavior.floating,
-                                        duration: const Duration(seconds: 3),
+                                        duration: Duration(seconds: 3),
                                       ),
                                     );
                                     return;

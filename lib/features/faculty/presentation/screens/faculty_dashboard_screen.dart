@@ -77,10 +77,10 @@ class _FacultyDashboardScreenState extends ConsumerState<FacultyDashboardScreen>
           Positioned.fill(
             child: profileAsync.when(
               data: (profile) => _buildTabContent(currentNavIndex, profile?.fullName ?? 'Faculty Advisor', brandTheme, theme),
-              loading: () => Padding(
-                padding: const EdgeInsets.only(top: 80, left: 16, right: 16),
+              loading: () => const Padding(
+                padding: EdgeInsets.only(top: 80, left: 16, right: 16),
                 child: Column(
-                  children: const [
+                  children: [
                     SkeletonCardRow(),
                     SkeletonCardRow(),
                   ],
@@ -387,7 +387,7 @@ class _FacultyDashboardScreenState extends ConsumerState<FacultyDashboardScreen>
                     ),
                     data: (drives) {
                       if (drives.isEmpty) {
-                        return StateBlockWidget(
+                        return const StateBlockWidget(
                           icon: Icons.work_off_outlined,
                           title: 'No Placement Drives',
                           message: 'There are currently no active or upcoming placement drives.',

@@ -19,16 +19,16 @@ class StudentAttendanceRemoteDataSource {
     try {
       qrData = jsonDecode(qrPayload) as Map<String, dynamic>;
     } catch (_) {
-      throw AttendanceException('Invalid QR Code', 'QR code data is malformed.');
+      throw const AttendanceException('Invalid QR Code', 'QR code data is malformed.');
     }
 
     if (qrData['type'] != 'tap_drive_attendance') {
-      throw AttendanceException('Invalid QR Code', 'This QR code is not for attendance.');
+      throw const AttendanceException('Invalid QR Code', 'This QR code is not for attendance.');
     }
 
     final driveId = qrData['drive_id'] as String?;
     if (driveId == null || driveId.isEmpty) {
-      throw AttendanceException('Invalid QR Code', 'QR code is missing drive information.');
+      throw const AttendanceException('Invalid QR Code', 'QR code is missing drive information.');
     }
 
     // 2. Verify drive exists
@@ -39,7 +39,7 @@ class StudentAttendanceRemoteDataSource {
         .maybeSingle();
 
     if (driveResponse == null) {
-      throw AttendanceException('Drive Not Found', 'The drive associated with this QR code no longer exists.');
+      throw const AttendanceException('Drive Not Found', 'The drive associated with this QR code no longer exists.');
     }
 
     // 3. Verify student has applied to this drive
@@ -51,7 +51,7 @@ class StudentAttendanceRemoteDataSource {
         .maybeSingle();
 
     if (application == null) {
-      throw AttendanceException('Not Applied to Drive', 'You have not applied for this placement drive. Attendance check-in is only permitted for registered applicants.');
+      throw const AttendanceException('Not Applied to Drive', 'You have not applied for this placement drive. Attendance check-in is only permitted for registered applicants.');
     }
 
     // 4. Check duplicate attendance
@@ -63,7 +63,7 @@ class StudentAttendanceRemoteDataSource {
         .maybeSingle();
 
     if (existing != null) {
-      throw AttendanceException('Already Marked', 'You have already marked attendance for this drive.');
+      throw const AttendanceException('Already Marked', 'You have already marked attendance for this drive.');
     }
 
     // 4. Get student profile
@@ -74,7 +74,7 @@ class StudentAttendanceRemoteDataSource {
         .maybeSingle();
 
     if (profile == null) {
-      throw AttendanceException('Profile Error', 'Could not find your student profile.');
+      throw const AttendanceException('Profile Error', 'Could not find your student profile.');
     }
 
     // 5. Insert attendance record (scanned_at automatically set by Postgres default now())
@@ -100,7 +100,7 @@ class StudentAttendanceRemoteDataSource {
     // Dispatch attendance confirmation email
     if (_emailService != null && profile['email'] != null) {
       try {
-        _emailService!.sendAttendanceConfirmationEmail(
+        _emailService.sendAttendanceConfirmationEmail(
           recipientEmail: profile['email'] as String,
           companyName: companyName.isNotEmpty ? companyName : 'Placement Drive',
           date: nowIso.split('T')[0],

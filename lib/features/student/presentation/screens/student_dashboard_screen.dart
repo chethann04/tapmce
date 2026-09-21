@@ -575,7 +575,7 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
   /// always fits without clipping or fixed-height overflow.
   double _carouselHeight(List<Drive> drives) {
     const cardWidth = 220.0;
-    final textWidth = cardWidth - AppSpacing.sp4 * 2;
+    const textWidth = cardWidth - AppSpacing.sp4 * 2;
     var maxHeight = 185.0;
     for (final d in drives) {
       final companyLines = _estimateTextLines(d.companyName, 16, textWidth);
@@ -711,7 +711,7 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
           drivesAsync.when(
             data: (drives) {
               if (drives.isEmpty) {
-                return StateBlockWidget(
+                return const StateBlockWidget(
                   icon: Icons.work_off_outlined,
                   title: 'No drives open right now',
                   message: "Check back after your coordinator publishes this cycle's calendar — you'll get a notification the moment a new drive opens.",
@@ -721,8 +721,8 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
                 children: drives.map((d) => _driveItem(d, appliedIds.contains(d.id), theme, brandTheme)).toList(),
               );
             },
-            loading: () => Column(
-              children: const [
+            loading: () => const Column(
+              children: [
                 SkeletonCardRow(),
                 SkeletonCardRow(),
               ],

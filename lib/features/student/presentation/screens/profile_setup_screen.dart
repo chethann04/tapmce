@@ -1060,7 +1060,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           // Gender
           _label('GENDER', brandTheme),
           DropdownButtonFormField<String>(
-            value: _gender,
+            initialValue: _gender,
             hint: Text('Select gender',
                 style: GoogleFonts.inter(
                     fontSize: 13, color: brandTheme.textMuted)),
@@ -1277,7 +1277,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                   children: [
                     _label('SEMESTER', brandTheme),
                     DropdownButtonFormField<int>(
-                      value: _semester,
+                      initialValue: _semester,
                       hint: Text('Select',
                           style: GoogleFonts.inter(
                               fontSize: 13, color: brandTheme.textMuted)),
@@ -1302,7 +1302,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                   children: [
                     _label('SECTION', brandTheme),
                     DropdownButtonFormField<String>(
-                      value: _section,
+                      initialValue: _section,
                       hint: Text('Select',
                           style: GoogleFonts.inter(
                               fontSize: 13, color: brandTheme.textMuted)),
@@ -1333,7 +1333,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                   children: [
                     _label('ADMISSION YEAR', brandTheme),
                     DropdownButtonFormField<int>(
-                      value: _admissionYear,
+                      initialValue: _admissionYear,
                       hint: Text('Select',
                           style: GoogleFonts.inter(
                               fontSize: 13, color: brandTheme.textMuted)),
@@ -1368,7 +1368,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                   children: [
                     _label('GRADUATION YEAR', brandTheme),
                     DropdownButtonFormField<int>(
-                      value: _graduationYear,
+                      initialValue: _graduationYear,
                       hint: Text('Select',
                           style: GoogleFonts.inter(
                               fontSize: 13, color: brandTheme.textMuted)),

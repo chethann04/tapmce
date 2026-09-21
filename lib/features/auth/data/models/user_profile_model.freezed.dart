@@ -320,17 +320,17 @@ class _$UserProfileModelImpl extends _UserProfileModel {
 
 abstract class _UserProfileModel extends UserProfileModel {
   const factory _UserProfileModel(
-      {required final String id,
-      required final String email,
-      required final UserRole role,
-      required final String full_name,
-      final String? department,
-      final double? cgpa,
-      final String? avatar_url,
-      @JsonKey(name: 'is_email_verified') required final bool isEmailVerified,
-      @JsonKey(name: 'created_at') required final DateTime createdAt,
+      {required String id,
+      required String email,
+      required UserRole role,
+      required String full_name,
+      String? department,
+      double? cgpa,
+      String? avatar_url,
+      @JsonKey(name: 'is_email_verified') required bool isEmailVerified,
+      @JsonKey(name: 'created_at') required DateTime createdAt,
       @JsonKey(name: 'updated_at')
-      final DateTime? updatedAt}) = _$UserProfileModelImpl;
+      DateTime? updatedAt}) = _$UserProfileModelImpl;
   const _UserProfileModel._() : super._();
 
   factory _UserProfileModel.fromJson(Map<String, dynamic> json) =

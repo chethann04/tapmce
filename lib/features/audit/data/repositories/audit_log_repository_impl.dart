@@ -67,7 +67,7 @@ class AuditLogRepositoryImpl implements AuditLogRepository {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) {
-        return (data: null, failure: Failure.server(message: 'Cannot log action: User not authenticated'));
+        return (data: null, failure: const Failure.server(message: 'Cannot log action: User not authenticated'));
       }
 
       await _supabase.from('audit_logs').insert({

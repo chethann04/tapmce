@@ -168,7 +168,7 @@ class _$OfflineActionImpl implements _OfflineAction {
   const _$OfflineActionImpl(
       {required this.id,
       required this.type,
-      required final Map<String, dynamic> payload,
+      required Map<String, dynamic> payload,
       required this.status,
       required this.createdAt,
       this.retryCount})
@@ -234,12 +234,12 @@ class _$OfflineActionImpl implements _OfflineAction {
 
 abstract class _OfflineAction implements OfflineAction {
   const factory _OfflineAction(
-      {required final String id,
-      required final ActionType type,
-      required final Map<String, dynamic> payload,
-      required final ActionStatus status,
-      required final DateTime createdAt,
-      final int? retryCount}) = _$OfflineActionImpl;
+      {required String id,
+      required ActionType type,
+      required Map<String, dynamic> payload,
+      required ActionStatus status,
+      required DateTime createdAt,
+      int? retryCount}) = _$OfflineActionImpl;
 
   @override
   String get id;

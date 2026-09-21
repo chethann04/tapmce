@@ -598,7 +598,7 @@ child: Container(
                     style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: _branches.isEmpty ? brandTheme.textMuted : brandTheme.brassPrimary),
                   ),
                   backgroundColor: _branches.isEmpty ? brandTheme.surfaceAlt : brandTheme.brassSoft,
-                  side: BorderSide(color: _branches.isEmpty ? brandTheme.cardBorder : brandTheme.brassPrimary.withOpacity(0.3)),
+                  side: BorderSide(color: _branches.isEmpty ? brandTheme.cardBorder : brandTheme.brassPrimary.withValues(alpha: 0.3)),
                   onPressed: () => _showDepartmentPicker(departmentsAsync.value!, brandTheme),
                 ),
               ],
@@ -768,7 +768,7 @@ child: Container(
                     margin: const EdgeInsets.only(top: 12),
                     width: 40,
                     height: 4,
-                    decoration: BoxDecoration(color: brandTheme.textMuted.withOpacity(0.3), borderRadius: BorderRadius.circular(2)),
+                    decoration: BoxDecoration(color: brandTheme.textMuted.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)),
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(AppSpacing.sp5, AppSpacing.sp4, AppSpacing.sp5, 0),
@@ -818,7 +818,7 @@ child: Container(
                         hintStyle: GoogleFonts.inter(color: brandTheme.textMuted),
                         prefixIcon: Icon(Icons.search_rounded, color: brandTheme.textMuted, size: 20),
                         filled: true,
-                        fillColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                        fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -859,7 +859,7 @@ child: Container(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.search_off_rounded, size: 40, color: brandTheme.textMuted.withOpacity(0.4)),
+                                Icon(Icons.search_off_rounded, size: 40, color: brandTheme.textMuted.withValues(alpha: 0.4)),
                                 const SizedBox(height: 8),
                                 Text('No departments found', style: GoogleFonts.inter(color: brandTheme.textMuted, fontSize: 13)),
                               ],
@@ -903,7 +903,7 @@ child: Container(
                                           color: isSelected ? brandTheme.brassPrimary : Colors.transparent,
                                           borderRadius: BorderRadius.circular(6),
                                           border: Border.all(
-                                            color: isSelected ? brandTheme.brassPrimary : brandTheme.textMuted.withOpacity(0.4),
+                                            color: isSelected ? brandTheme.brassPrimary : brandTheme.textMuted.withValues(alpha: 0.4),
                                             width: 1.5,
                                           ),
                                         ),
@@ -916,7 +916,7 @@ child: Container(
                                         constraints: const BoxConstraints(minWidth: 28),
                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                                         decoration: BoxDecoration(
-                                          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                                          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                                           borderRadius: BorderRadius.circular(6),
                                         ),
                                         child: Center(

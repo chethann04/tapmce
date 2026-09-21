@@ -183,14 +183,14 @@ class FacultyRepositoryImpl implements FacultyRepository {
         // 1. Send Email
         if (email.isNotEmpty && _emailService != null) {
           if (status == ApprovalStatus.approved) {
-            _emailService!.sendProfileApprovedEmail(
+            _emailService.sendProfileApprovedEmail(
               recipientEmail: email,
               studentName: name,
               usn: usn,
               verifiedCourse: courseName,
             );
           } else if (status == ApprovalStatus.rejected) {
-            _emailService!.sendProfileRejectedEmail(
+            _emailService.sendProfileRejectedEmail(
               recipientEmail: email,
               studentName: name,
               reason: rejectionReason ?? 'Incorrect academic information. Please meet your coordinator.',

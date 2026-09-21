@@ -260,10 +260,12 @@ class _AppointFacultyCoordinatorScreenState
                         filled: true,
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty)
+                        if (v == null || v.isEmpty) {
                           return 'Please enter or select an email address';
-                        if (!v.contains('@') || !v.contains('.'))
+                        }
+                        if (!v.contains('@') || !v.contains('.')) {
                           return 'Please enter a valid email';
+                        }
                         return null;
                       },
                     ),

@@ -284,8 +284,8 @@ class _$ServerFailureImpl implements ServerFailure {
 
 abstract class ServerFailure implements Failure {
   const factory ServerFailure(
-      {required final String message,
-      final String? code}) = _$ServerFailureImpl;
+      {required String message,
+      String? code}) = _$ServerFailureImpl;
 
   @override
   String get message;
@@ -455,7 +455,7 @@ class _$NetworkFailureImpl implements NetworkFailure {
 }
 
 abstract class NetworkFailure implements Failure {
-  const factory NetworkFailure({required final String message}) =
+  const factory NetworkFailure({required String message}) =
       _$NetworkFailureImpl;
 
   @override
@@ -633,7 +633,7 @@ class _$AuthFailureImpl implements AuthFailure {
 
 abstract class AuthFailure implements Failure {
   const factory AuthFailure(
-      {required final String message, final String? code}) = _$AuthFailureImpl;
+      {required String message, String? code}) = _$AuthFailureImpl;
 
   @override
   String get message;
@@ -803,7 +803,7 @@ class _$UnauthorizedFailureImpl implements UnauthorizedFailure {
 }
 
 abstract class UnauthorizedFailure implements Failure {
-  const factory UnauthorizedFailure({required final String message}) =
+  const factory UnauthorizedFailure({required String message}) =
       _$UnauthorizedFailureImpl;
 
   @override
@@ -972,7 +972,7 @@ class _$CacheFailureImpl implements CacheFailure {
 }
 
 abstract class CacheFailure implements Failure {
-  const factory CacheFailure({required final String message}) =
+  const factory CacheFailure({required String message}) =
       _$CacheFailureImpl;
 
   @override
@@ -1151,8 +1151,8 @@ class _$ValidationFailureImpl implements ValidationFailure {
 
 abstract class ValidationFailure implements Failure {
   const factory ValidationFailure(
-      {required final String message,
-      final String? field}) = _$ValidationFailureImpl;
+      {required String message,
+      String? field}) = _$ValidationFailureImpl;
 
   @override
   String get message;
