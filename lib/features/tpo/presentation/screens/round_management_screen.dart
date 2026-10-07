@@ -15,6 +15,7 @@ import '../../../student/presentation/providers/student_timeline_provider.dart';
 import '../../../student/presentation/providers/student_drive_provider.dart';
 import '../../domain/entities/drive_round.dart';
 import '../providers/tpo_provider.dart';
+import '../../../../shared/presentation/widgets/profile_avatar.dart';
 
 class RoundManagementScreen extends ConsumerStatefulWidget {
   final Drive drive;
@@ -591,7 +592,7 @@ class _RoundManagementScreenState
     final usn = student['usn'] as String? ?? 'N/A';
     final dept = student['department'] as String? ?? 'N/A';
     final cgpa = student['cgpa']?.toString() ?? 'N/A';
-    final photoUrl = student['photo_url'] as String?;
+    final photoUrl = (student['photo_url'] ?? student['avatar_url']) as String?;
     final appId = app['id'] as String;
     final isSelected = _selectedAppIds.contains(appId);
     final status = app['status'] as String? ?? 'applied';
@@ -673,20 +674,12 @@ class _RoundManagementScreenState
                   ),
                 ),
                 const SizedBox(width: 8),
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: brandTheme.brassPrimary.withValues(alpha: 0.15),
-                  backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                  child: photoUrl == null || photoUrl.isEmpty
-                      ? Text(
-                          name.isNotEmpty ? name[0].toUpperCase() : 'S',
-                          style: GoogleFonts.fraunces(
-                            fontWeight: FontWeight.bold,
-                            color: brandTheme.brassPrimary,
-                            fontSize: 14,
-                          ),
-                        )
-                      : null,
+                ProfileAvatar(
+                  imageUrl: photoUrl,
+                  name: name,
+                  size: ProfileAvatarSize.small,
+                  customRadius: 20,
+                  semanticsLabel: '$name profile picture',
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1074,7 +1067,7 @@ class _RoundManagementScreenState
     final dept = student['department'] as String? ?? 'N/A';
     final cgpa = student['cgpa']?.toString() ?? 'N/A';
     final phone = student['phone'] as String? ?? 'N/A';
-    final photoUrl = student['photo_url'] as String?;
+    final photoUrl = (student['photo_url'] ?? student['avatar_url']) as String?;
     final appCurrentRound = app['current_round'] as int? ?? 1;
     final status = app['status'] as String? ?? 'applied';
 
@@ -1111,20 +1104,14 @@ class _RoundManagementScreenState
             // Header Profile Card
             Row(
               children: [
-                CircleAvatar(
-                  radius: 26,
-                  backgroundColor: brandTheme.brassPrimary.withValues(alpha: 0.15),
-                  backgroundImage: photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                  child: photoUrl == null || photoUrl.isEmpty
-                      ? Text(
-                          name.isNotEmpty ? name[0].toUpperCase() : 'S',
-                          style: GoogleFonts.fraunces(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                            color: brandTheme.brassPrimary,
-                          ),
-                        )
-                      : null,
+                ProfileAvatar(
+                  imageUrl: photoUrl,
+                  name: name,
+                  size: ProfileAvatarSize.medium,
+                  customRadius: 26,
+                  showBorder: true,
+                  borderColor: brandTheme.brassPrimary.withValues(alpha: 0.4),
+                  semanticsLabel: '$name profile picture',
                 ),
                 const SizedBox(width: 12),
                 Expanded(

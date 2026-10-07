@@ -178,7 +178,24 @@ class AuthRemoteDatasource {
           .eq('id', userId)
           .maybeSingle();
       if (data != null) {
-        return UserProfile.fromMap(data);
+        final profileMap = Map<String, dynamic>.from(data);
+        final user = currentUser;
+        if (user != null && user.id == userId) {
+          final meta = user.userMetadata;
+          if (meta != null) {
+            final metaLinkedin = meta['linkedin_url'] as String?;
+            final metaGithub = meta['github_url'] as String?;
+            if ((profileMap['linkedin_url'] == null || (profileMap['linkedin_url'] as String).isEmpty) &&
+                metaLinkedin != null && metaLinkedin.isNotEmpty) {
+              profileMap['linkedin_url'] = metaLinkedin;
+            }
+            if ((profileMap['github_url'] == null || (profileMap['github_url'] as String).isEmpty) &&
+                metaGithub != null && metaGithub.isNotEmpty) {
+              profileMap['github_url'] = metaGithub;
+            }
+          }
+        }
+        return UserProfile.fromMap(profileMap);
       }
     } catch (e) {
       // Log error — do NOT silently swallow and fall back to student
@@ -227,6 +244,8 @@ class AuthRemoteDatasource {
         approvalStatus: role == UserRole.student
             ? ApprovalStatus.pending
             : ApprovalStatus.approved,
+        linkedinUrl: user.userMetadata?['linkedin_url'] as String?,
+        githubUrl: user.userMetadata?['github_url'] as String?,
         createdAt: DateTime.tryParse(user.createdAt) ?? DateTime.now(),
         updatedAt: DateTime.now(),
       );

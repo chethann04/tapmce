@@ -163,7 +163,7 @@ class _DriveCreationWizardState extends ConsumerState<DriveCreationWizard> {
           cgpaCutoff: cgpa,
           backlogLimit: backlogs,
           applicationDeadline: _selectedDeadline,
-          status: 'active',
+          status: 'upcoming',
           createdBy: createdBy,
         );
       }

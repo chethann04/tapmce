@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../auth/domain/entities/user_profile.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -12,7 +13,6 @@ import '../../../../core/utils/file_name_extractor.dart';
 import '../../../../shared/presentation/widgets/floating_pill_nav_bar.dart';
 import '../../../../shared/presentation/widgets/skeleton_loader.dart';
 import '../../../../shared/presentation/widgets/state_block_widget.dart';
-import '../../../../shared/presentation/widgets/app_logo.dart';
 import '../providers/student_drive_provider.dart';
 import '../../domain/entities/application.dart';
 import '../../domain/entities/drive.dart';
@@ -22,6 +22,7 @@ import '../../../../shared/presentation/widgets/app_refresh_indicator.dart';
 import '../../../../core/theme/app_motion.dart';
 
 import '../../../../shared/presentation/widgets/animated_counter.dart';
+import '../../../../shared/presentation/widgets/profile_avatar.dart';
 
 class StudentDashboardScreen extends ConsumerStatefulWidget {
   const StudentDashboardScreen({super.key});
@@ -159,14 +160,15 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
           // Greeting & User Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const AppLogo(size: 42, showGlow: true),
-              const SizedBox(width: AppSpacing.sp3),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     RichText(
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       text: TextSpan(
                         text: 'Hey, ',
                         style: GoogleFonts.fraunces(
@@ -194,6 +196,8 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
                               if (profile.department != null && profile.department!.isNotEmpty) profile.department,
                             ].where((s) => s != null && s.isNotEmpty).join(' · ')
                           : '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         color: brandTheme.textMuted,
@@ -202,8 +206,10 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               IconButton(
-                icon: Icon(Icons.logout_rounded, size: 20, color: brandTheme.textMuted),
+                icon: Icon(Icons.logout_rounded, size: 22, color: brandTheme.textMuted),
+                tooltip: 'Sign Out',
                 onPressed: () async {
                   await ref.read(authNotifierProvider.notifier).signOut();
                   if (context.mounted) context.go('/login');
@@ -598,8 +604,23 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
 
   Widget _horizontalDriveCard(Drive drive, bool isApplied, AppBrandTheme brandTheme, ThemeData theme) {
     final daysLeft = drive.applicationDeadline.difference(DateTime.now()).inDays;
-    final deadlineText = daysLeft > 0 ? 'Closes in ${daysLeft}d' : 'Closing today';
-    final badge = drive.cgpaCutoff > 0 ? 'CGPA ${drive.cgpaCutoff}+' : 'All branches';
+    final isUpcoming = drive.isUpcoming;
+    final isClosed = drive.isClosed;
+
+    final String deadlineText;
+    if (isUpcoming) {
+      deadlineText = drive.startDate != null
+          ? 'Opens ${DateFormat('dd MMM').format(drive.startDate!)}'
+          : 'Applications Opening Soon';
+    } else if (isClosed) {
+      deadlineText = 'Closed';
+    } else {
+      deadlineText = daysLeft > 0 ? 'Closes in ${daysLeft}d' : 'Closing today';
+    }
+
+    final badge = isUpcoming
+        ? 'Upcoming'
+        : (drive.cgpaCutoff > 0 ? 'CGPA ${drive.cgpaCutoff}+' : 'All branches');
 
     return GestureDetector(
       onTap: () {
@@ -612,7 +633,9 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
           color: theme.colorScheme.surface,
           shape: ContinuousRectangleBorder(
             borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
-            side: BorderSide(color: brandTheme.cardBorder),
+            side: BorderSide(
+              color: isUpcoming ? Colors.amber.withValues(alpha: 0.4) : brandTheme.cardBorder,
+            ),
           ),
         ),
         child: Column(
@@ -620,6 +643,7 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
                   width: 38,
@@ -635,6 +659,23 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
                     ),
                   ),
                 ),
+                if (isUpcoming)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+                    ),
+                    child: Text(
+                      'UPCOMING',
+                      style: GoogleFonts.ibmPlexMono(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.amber.shade700,
+                      ),
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 8),
@@ -652,7 +693,11 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
                   const SizedBox(height: 2),
                   Text(
                     '${drive.roleTitle} · $deadlineText',
-                    style: GoogleFonts.inter(fontSize: 11, color: brandTheme.textMuted),
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: isUpcoming ? Colors.amber.shade700 : brandTheme.textMuted,
+                      fontWeight: isUpcoming ? FontWeight.w600 : FontWeight.normal,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -679,10 +724,17 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
                 : Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: brandTheme.brassSoft,
+                      color: isUpcoming ? Colors.amber.withValues(alpha: 0.12) : brandTheme.brassSoft,
                       borderRadius: BorderRadius.circular(100),
                     ),
-                    child: Text(badge, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: brandTheme.brassPrimary)),
+                    child: Text(
+                      badge,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: isUpcoming ? Colors.amber.shade800 : brandTheme.brassPrimary,
+                      ),
+                    ),
                   ),
           ],
         ),
@@ -767,18 +819,15 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
             child: Column(
               children: [
                 // Photo or Initial
-                if (profile?.photoUrl != null && profile!.photoUrl!.isNotEmpty)
-                  ClipOval(
-                    child: Image.network(
-                      profile.photoUrl!,
-                      width: 88,
-                      height: 88,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _avatarFallback(name, brandTheme),
-                    ),
-                  )
-                else
-                  _avatarFallback(name, brandTheme),
+                ProfileAvatar(
+                  imageUrl: profile?.photoUrl,
+                  name: name,
+                  size: ProfileAvatarSize.hero,
+                  showBorder: true,
+                  borderColor: brandTheme.brassPrimary,
+                  borderWidth: 3,
+                  semanticsLabel: '$name profile picture',
+                ),
                 const SizedBox(height: AppSpacing.sp3),
                 Text(name, style: GoogleFonts.fraunces(fontSize: 24, fontWeight: FontWeight.w600)),
                 if (usn.isNotEmpty) ...[
@@ -902,25 +951,12 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
 
           // ── Resume ────────────────────────────────────────────────────
           _resumeCard(profile, theme, brandTheme),
+          const SizedBox(height: AppSpacing.sp3),
+
+          // ── Professional Links (LinkedIn & GitHub) ────────────────────
+          _professionalLinksCard(profile, theme, brandTheme),
           const SizedBox(height: AppSpacing.sp6),
         ],
-      ),
-    );
-  }
-
-  Widget _avatarFallback(String name, AppBrandTheme brandTheme) {
-    return Container(
-      width: 88,
-      height: 88,
-      decoration: BoxDecoration(
-        gradient: brandTheme.brassGradient,
-        shape: BoxShape.circle,
-      ),
-      child: Center(
-        child: Text(
-          name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
-          style: GoogleFonts.fraunces(fontSize: 36, color: brandTheme.onBrass, fontWeight: FontWeight.w600),
-        ),
       ),
     );
   }
@@ -1078,7 +1114,20 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
 
   Widget _driveItem(Drive drive, bool isApplied, ThemeData theme, AppBrandTheme brandTheme) {
     final daysLeft = drive.applicationDeadline.difference(DateTime.now()).inDays;
-    final deadlineText = daysLeft > 0 ? 'Deadline in ${daysLeft}d' : 'Deadline today';
+    final isUpcoming = drive.isUpcoming;
+    final isClosed = drive.isClosed;
+
+    final String deadlineText;
+    if (isUpcoming) {
+      deadlineText = drive.startDate != null
+          ? 'Application opens: ${DateFormat('dd MMM yyyy').format(drive.startDate!)}'
+          : 'Applications Opening Soon';
+    } else if (isClosed) {
+      deadlineText = 'Applications Closed';
+    } else {
+      deadlineText = daysLeft > 0 ? 'Deadline in ${daysLeft}d' : 'Deadline today';
+    }
+
     final details = '${drive.roleTitle} · ${drive.ctcOrStipend}';
 
     return GestureDetector(
@@ -1092,7 +1141,9 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
           color: theme.colorScheme.surface,
           shape: ContinuousRectangleBorder(
             borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
-            side: BorderSide(color: brandTheme.cardBorder),
+            side: BorderSide(
+              color: isUpcoming ? Colors.amber.withValues(alpha: 0.4) : brandTheme.cardBorder,
+            ),
           ),
         ),
         child: Row(
@@ -1102,43 +1153,231 @@ class _StudentDashboardScreenState extends ConsumerState<StudentDashboardScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(drive.companyName, style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 15)),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          drive.companyName,
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 15),
+                        ),
+                      ),
+                      if (isUpcoming) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'UPCOMING',
+                            style: GoogleFonts.ibmPlexMono(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.amber.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
                   Text(details, style: GoogleFonts.inter(fontSize: 12, color: brandTheme.textMuted)),
                   const SizedBox(height: 4),
-                  Text(deadlineText, style: GoogleFonts.ibmPlexMono(fontSize: 11, color: brandTheme.brassPrimary)),
+                  Text(
+                    deadlineText,
+                    style: GoogleFonts.ibmPlexMono(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isUpcoming ? Colors.amber.shade700 : (isClosed ? brandTheme.statusRejected : brandTheme.brassPrimary),
+                    ),
+                  ),
                 ],
               ),
             ),
-            isApplied
-                ? Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: brandTheme.statusShortlisted.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(AppShapes.radiusSmall),
+            const SizedBox(width: 8),
+            if (isApplied)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: brandTheme.statusShortlisted.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(AppShapes.radiusSmall),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_rounded, size: 14, color: brandTheme.statusShortlisted),
+                    const SizedBox(width: 4),
+                    Text('Applied', style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: brandTheme.statusShortlisted,
+                    )),
+                  ],
+                ),
+              )
+            else if (isUpcoming)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppShapes.radiusSmall),
+                  border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.hourglass_top_rounded, size: 13, color: Colors.amber.shade700),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Upcoming',
+                      style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.amber.shade800),
                     ),
+                  ],
+                ),
+              )
+            else if (isClosed)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: brandTheme.surfaceAlt,
+                  borderRadius: BorderRadius.circular(AppShapes.radiusSmall),
+                  border: Border.all(color: brandTheme.cardBorder),
+                ),
+                child: Text('Closed', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: brandTheme.textMuted)),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: brandTheme.brassGradient,
+                  borderRadius: BorderRadius.circular(AppShapes.radiusSmall),
+                ),
+                child: Text('Apply', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: brandTheme.onBrass)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _professionalLinksCard(UserProfile? profile, ThemeData theme, AppBrandTheme brandTheme) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.sp4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
+        border: Border.all(color: brandTheme.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.link_rounded, size: 18, color: brandTheme.brassPrimary),
+              const SizedBox(width: AppSpacing.sp2),
+              Expanded(
+                child: Text('Professional Links', style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14)),
+              ),
+              GestureDetector(
+                onTap: () => context.push('/student/profile-edit', extra: 3),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp3, vertical: AppSpacing.sp1),
+                  decoration: BoxDecoration(
+                    color: brandTheme.brassSoft.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.edit_rounded, size: 14, color: brandTheme.brassPrimary),
+                      const SizedBox(width: 4),
+                      Text('Edit', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: brandTheme.brassPrimary)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sp3),
+          _linkRow(
+            label: 'LinkedIn Profile',
+            url: profile?.linkedinUrl,
+            icon: Icons.business_center_outlined,
+            brandTheme: brandTheme,
+          ),
+          _linkRow(
+            label: 'GitHub Profile',
+            url: profile?.githubUrl,
+            icon: Icons.code_rounded,
+            brandTheme: brandTheme,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _linkRow({
+    required String label,
+    required String? url,
+    required IconData icon,
+    required AppBrandTheme brandTheme,
+  }) {
+    final hasUrl = url != null && url.isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Row(
+              children: [
+                Icon(icon, size: 16, color: brandTheme.textMuted),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(label, style: GoogleFonts.inter(fontSize: 12, color: Colors.grey)),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: hasUrl
+                ? InkWell(
+                    onTap: () async {
+                      final uri = Uri.parse(url);
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(4),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.check_rounded, size: 14, color: brandTheme.statusShortlisted),
+                        Flexible(
+                          child: Text(
+                            url,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: brandTheme.brassPrimary,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
                         const SizedBox(width: 4),
-                        Text('Applied', style: GoogleFonts.inter(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: brandTheme.statusShortlisted,
-                        )),
+                        Icon(Icons.open_in_new_rounded, size: 14, color: brandTheme.brassPrimary),
                       ],
                     ),
                   )
-                : Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      gradient: brandTheme.brassGradient,
-                      borderRadius: BorderRadius.circular(AppShapes.radiusSmall),
-                    ),
-                    child: Text('Apply', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: brandTheme.onBrass)),
-                  ),
-          ],
-        ),
+                : Text('Not added', style: GoogleFonts.inter(fontSize: 13, color: brandTheme.textMuted, fontStyle: FontStyle.italic)),
+          ),
+        ],
       ),
     );
   }

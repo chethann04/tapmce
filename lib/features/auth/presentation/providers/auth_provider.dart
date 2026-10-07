@@ -129,6 +129,8 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserProfile?>> {
             name: metaName,
             role: UserRole.fromString(metaRole),
             approvalStatus: metaRole == 'student' ? ApprovalStatus.pending : ApprovalStatus.approved,
+            linkedinUrl: user.userMetadata?['linkedin_url'] as String?,
+            githubUrl: user.userMetadata?['github_url'] as String?,
             createdAt: DateTime.now(),
             updatedAt: DateTime.now(),
           );

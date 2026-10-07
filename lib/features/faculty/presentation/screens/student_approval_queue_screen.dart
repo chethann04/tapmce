@@ -9,6 +9,7 @@ import '../providers/faculty_provider.dart';
 import '../../../student/presentation/screens/profile_setup_screen.dart';
 import '../../../../core/theme/theme_extensions.dart';
 import '../../../../shared/presentation/widgets/app_refresh_indicator.dart';
+import '../../../../shared/presentation/widgets/profile_avatar.dart';
 
 class StudentApprovalQueueScreen extends ConsumerStatefulWidget {
   const StudentApprovalQueueScreen({super.key});
@@ -387,22 +388,12 @@ class _StudentApprovalQueueScreenState
               const SizedBox(height: 12),
               Row(
                 children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: (brandTheme?.brassPrimary ?? Colors.amber).withValues(alpha: 0.15),
-                    backgroundImage: (student.photoUrl != null && student.photoUrl!.isNotEmpty)
-                        ? NetworkImage(student.photoUrl!)
-                        : null,
-                    child: (student.photoUrl == null || student.photoUrl!.isEmpty)
-                        ? Text(
-                            student.name.isNotEmpty ? student.name[0].toUpperCase() : 'S',
-                            style: GoogleFonts.ibmPlexMono(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              color: brandTheme?.brassPrimary ?? theme.colorScheme.primary,
-                            ),
-                          )
-                        : null,
+                  ProfileAvatar(
+                    imageUrl: student.photoUrl,
+                    name: student.name,
+                    size: ProfileAvatarSize.medium,
+                    customRadius: 24,
+                    semanticsLabel: '${student.name} profile picture',
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -583,71 +574,93 @@ class _StudentApprovalQueueScreenState
                 ),
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  // Show Edit Details button for Rejected or Pending students
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _openFullStudentEditWizard(student);
-                      },
-                      icon: const Icon(Icons.edit_note_rounded, size: 18, color: Colors.amber),
-                      label: const Text(
-                        'Edit Details',
-                        style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.amber, width: 1.2),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Show Reject button for Pending or Approved students
-                  if (student.approvalStatus == ApprovalStatus.pending || student.approvalStatus == ApprovalStatus.approved) ...[
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _rejectStudent(student);
-                        },
-                        icon: const Icon(Icons.close_rounded, color: Colors.red, size: 16),
-                        label: Text(
-                          student.approvalStatus == ApprovalStatus.approved ? 'Reject' : 'Reject',
-                          style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: Colors.red.shade300, width: 1.2),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isCompact = constraints.maxWidth < 360;
+                  return Row(
+                    children: [
+                      // Show Edit Details button for Rejected or Pending students
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _openFullStudentEditWizard(student);
+                          },
+                          icon: Icon(Icons.edit_note_rounded, size: isCompact ? 16 : 18, color: Colors.amber),
+                          label: Text(
+                            isCompact ? 'Edit' : 'Edit Details',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.amber,
+                              fontWeight: FontWeight.bold,
+                              fontSize: isCompact ? 12 : 13,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.amber, width: 1.2),
+                            padding: EdgeInsets.symmetric(vertical: isCompact ? 10 : 12, horizontal: 4),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  // Show Approve button for Pending or Rejected students
-                  if (student.approvalStatus == ApprovalStatus.pending || student.approvalStatus == ApprovalStatus.rejected) ...[
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _approveStudent(student);
-                        },
-                        icon: const Icon(Icons.check_rounded, size: 16),
-                        label: Text(
-                          student.approvalStatus == ApprovalStatus.rejected
-                              ? 'Re-Approve'
-                              : 'Approve',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                      const SizedBox(width: 8),
+                      // Show Reject button for Pending or Approved students
+                      if (student.approvalStatus == ApprovalStatus.pending || student.approvalStatus == ApprovalStatus.approved) ...[
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _rejectStudent(student);
+                            },
+                            icon: Icon(Icons.close_rounded, color: Colors.red, size: isCompact ? 14 : 16),
+                            label: Text(
+                              'Reject',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
+                                fontSize: isCompact ? 12 : 13,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: Colors.red.shade300, width: 1.2),
+                              padding: EdgeInsets.symmetric(vertical: isCompact ? 10 : 12, horizontal: 4),
+                            ),
+                          ),
                         ),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.green.shade600,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        const SizedBox(width: 8),
+                      ],
+                      // Show Approve button for Pending or Rejected students
+                      if (student.approvalStatus == ApprovalStatus.pending || student.approvalStatus == ApprovalStatus.rejected) ...[
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _approveStudent(student);
+                            },
+                            icon: Icon(Icons.check_rounded, size: isCompact ? 14 : 16),
+                            label: Text(
+                              student.approvalStatus == ApprovalStatus.rejected
+                                  ? (isCompact ? 'Re-Approve' : 'Re-Approve')
+                                  : 'Approve',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: isCompact ? 12 : 13,
+                              ),
+                            ),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.green.shade600,
+                              padding: EdgeInsets.symmetric(vertical: isCompact ? 10 : 12, horizontal: 4),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
-                ],
+                      ],
+                    ],
+                  );
+                },
               ),
             ],
           ),
@@ -1092,13 +1105,12 @@ class _StudentApprovalQueueScreenState
                         ),
                       ),
                       const SizedBox(width: 8),
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: accent.withValues(alpha: 0.15),
-                        child: Text(
-                          student.name.isNotEmpty ? student.name.split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join().toUpperCase() : 'S',
-                          style: GoogleFonts.ibmPlexMono(fontWeight: FontWeight.bold, color: accent, fontSize: 13),
-                        ),
+                      ProfileAvatar(
+                        imageUrl: student.photoUrl,
+                        name: student.name,
+                        size: ProfileAvatarSize.small,
+                        customRadius: 20,
+                        semanticsLabel: '${student.name} profile picture',
                       ),
                       const SizedBox(width: 12),
                       Expanded(

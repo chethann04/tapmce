@@ -108,9 +108,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       case UserRole.student:
         return '/student';
       case UserRole.facultyCoordinator:
-        return '/faculty';
       case UserRole.faculty:
-        return '/faculty/waiting';
+        return '/faculty';
       case UserRole.admin:
         return '/admin';
       case UserRole.tpo:

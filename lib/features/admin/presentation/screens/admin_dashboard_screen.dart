@@ -2,20 +2,240 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../auth/domain/entities/user_profile.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/admin_provider.dart';
+import '../../../../core/services/profile_service.dart';
 import '../../../../core/theme/theme_extensions.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/presentation/widgets/skeleton_loader.dart';
 import '../../../../shared/presentation/widgets/app_logo.dart';
 import '../../../../shared/presentation/widgets/app_refresh_indicator.dart';
+import '../../../../shared/presentation/widgets/profile_avatar.dart';
+import '../../../../shared/presentation/widgets/subtle_divider.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
 
+  Future<void> _showAdminProfileModal(
+    BuildContext context,
+    WidgetRef ref,
+    UserProfile user,
+  ) async {
+    final theme = Theme.of(context);
+    final brandTheme = theme.extension<AppBrandTheme>()!;
+    final messenger = ScaffoldMessenger.of(context);
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        bool isUploading = false;
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return Padding(
+            padding: EdgeInsets.only(
+              top: 20,
+              left: 20,
+              right: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: brandTheme.textMuted.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Stack(
+                    children: [
+                      ProfileAvatar(
+                        imageUrl: user.photoUrl,
+                        name: user.name,
+                        size: ProfileAvatarSize.large,
+                        showBorder: true,
+                        borderColor: brandTheme.brassPrimary,
+                        borderWidth: 2.5,
+                        semanticsLabel: '${user.name} profile picture',
+                      ),
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () async {
+                              final profileService = ref.read(profileServiceProvider);
+                              try {
+                                final bytes = await profileService.pickAndCropImage(context);
+                                if (bytes == null) return;
+
+                                setModalState(() => isUploading = true);
+                                messenger.showSnackBar(
+                                  const SnackBar(
+                                    content: Row(
+                                      children: [
+                                        SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                        ),
+                                        SizedBox(width: 12),
+                                        Text('Uploading profile photo...'),
+                                      ],
+                                    ),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+
+                                await profileService.uploadAndUpdateAvatar(
+                                  userId: user.id,
+                                  imageBytes: bytes,
+                                );
+
+                                if (ctx.mounted) Navigator.pop(ctx);
+                                messenger.showSnackBar(
+                                  const SnackBar(
+                                    content: Text('✅ Profile photo updated successfully!'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              } catch (e) {
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text('❌ Error updating photo: $e'),
+                                    backgroundColor: Colors.redAccent,
+                                  ),
+                                );
+                              }
+                            },
+                            customBorder: const CircleBorder(),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                gradient: brandTheme.brassGradient,
+                                shape: BoxShape.circle,
+                              ),
+                              child: isUploading
+                                  ? SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: brandTheme.onBrass,
+                                      ),
+                                    )
+                                  : Icon(Icons.camera_alt_rounded, size: 14, color: brandTheme.onBrass),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    user.name,
+                    style: GoogleFonts.fraunces(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: brandTheme.brassPrimary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Text(
+                      'SYSTEM ADMINISTRATOR',
+                      style: GoogleFonts.ibmPlexMono(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: brandTheme.brassPrimary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerLowest,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: brandTheme.cardBorder),
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      children: [
+                        _modalInfoRow(Icons.email_outlined, 'Email', user.email, brandTheme),
+                        const SubtleDivider(height: 16),
+                        _modalInfoRow(Icons.apartment_rounded, 'Department', user.department ?? 'IT & Administration', brandTheme),
+                        const SubtleDivider(height: 16),
+                        _modalInfoRow(Icons.security_rounded, 'Access Level', 'Full System Superuser ✓', brandTheme, isAccent: true),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await ref.read(authNotifierProvider.notifier).signOut();
+                        if (context.mounted) context.go('/login');
+                      },
+                      icon: const Icon(Icons.logout_rounded, color: Colors.red, size: 18),
+                      label: Text('Sign Out', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: Colors.red)),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.red.shade300),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+  static Widget _modalInfoRow(IconData icon, String label, String value, AppBrandTheme brandTheme, {bool isAccent = false}) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: isAccent ? brandTheme.brassPrimary : brandTheme.textMuted),
+        const SizedBox(width: 10),
+        Text('$label: ', style: GoogleFonts.inter(fontSize: 12, color: brandTheme.textMuted)),
+        Expanded(
+          child: Text(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isAccent ? brandTheme.brassPrimary : null,
+            ),
+            textAlign: TextAlign.end,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(authNotifierProvider);
+    final user = profileAsync.valueOrNull;
     final theme = Theme.of(context);
     final brandTheme = theme.extension<AppBrandTheme>()!;
 
@@ -33,6 +253,7 @@ class AdminDashboardScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: Icon(Icons.logout_rounded, size: 20, color: brandTheme.textMuted),
+            tooltip: 'Sign Out',
             onPressed: () async {
               await ref.read(authNotifierProvider.notifier).signOut();
               if (context.mounted) context.go('/login');
@@ -41,7 +262,7 @@ class AdminDashboardScreen extends ConsumerWidget {
         ],
       ),
       body: profileAsync.when(
-        data: (profile) => _body(context, ref, profile?.fullName ?? 'Admin', brandTheme, theme),
+        data: (profile) => _body(context, ref, profile?.fullName ?? 'Admin', brandTheme, theme, profile),
         loading: () => const Padding(
           padding: EdgeInsets.all(AppSpacing.sp5),
           child: Column(
@@ -56,9 +277,10 @@ class AdminDashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _body(BuildContext context, WidgetRef ref, String name, AppBrandTheme brandTheme, ThemeData theme) => AppRefreshIndicator(
+  Widget _body(BuildContext context, WidgetRef ref, String name, AppBrandTheme brandTheme, ThemeData theme, UserProfile? profile) => AppRefreshIndicator(
         onRefresh: () async {
-          await ref.refresh(adminStatsProvider.future);
+          ref.invalidate(adminStatsProvider);
+          await ref.read(adminStatsProvider.future);
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -100,14 +322,18 @@ class AdminDashboardScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sp2),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: brandTheme.brassSoft,
-                    borderRadius: BorderRadius.circular(100),
+                InkWell(
+                  onTap: profile != null ? () => _showAdminProfileModal(context, ref, profile) : null,
+                  borderRadius: BorderRadius.circular(100),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: brandTheme.brassSoft,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Text('Admin',
+                        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: brandTheme.brassPrimary)),
                   ),
-                  child: Text('Admin',
-                      style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: brandTheme.brassPrimary)),
                 ),
               ],
             ),

@@ -975,7 +975,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
                               ),
                               onPressed: () async {
                                 final pushService = ref.read(pushNotificationServiceProvider);
-                                setDialogState(() => testStatus = 'Resetting cache & fetching fresh token for tapmce-30c3f...');
+                                setDialogState(() => testStatus = 'Resetting cache & fetching fresh token for tapacc-e12f4...');
                                 final newToken = await pushService.refreshToken();
                                 final inDb = await pushService.checkTokenInDatabase();
                                 setDialogState(() => testStatus = newToken != null

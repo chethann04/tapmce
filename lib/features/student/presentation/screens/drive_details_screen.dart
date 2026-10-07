@@ -169,12 +169,15 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
     }
 
     // Drive status check: only active/open/ongoing drives can accept applications
-    final driveStatus = _drive.status.toLowerCase();
-    final isActive = driveStatus == 'active' || driveStatus == 'open' || driveStatus == 'ongoing';
+    final isUpcoming = _drive.isUpcoming;
+    final isActive = _drive.isActive;
+
     checks.add(_EligibilityCheck(
-      label: 'Drive Active',
+      label: isUpcoming ? 'Application Opening' : 'Drive Active',
       passed: isActive,
-      detail: isActive ? null : 'Applications are closed because this drive is ${_drive.status.toUpperCase()}.',
+      detail: isUpcoming
+          ? 'Applications have not opened yet. Opening on ${DateFormat('dd MMM yyyy').format(_drive.startDate ?? _drive.applicationDeadline.subtract(const Duration(days: 7)))}.'
+          : (isActive ? null : 'Applications are closed because this drive is ${_drive.status.toUpperCase()}.'),
     ));
 
     // Registration deadline
@@ -224,8 +227,21 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
       if (user == null) return;
 
       // Validate drive status before submitting
-      final driveStatus = _drive.status.toLowerCase();
-      final isActive = driveStatus == 'active' || driveStatus == 'open' || driveStatus == 'ongoing';
+      if (_drive.isUpcoming) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚠️ Applications for this drive have not opened yet.'),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Colors.orangeAccent,
+            ),
+          );
+        }
+        setState(() => _isSubmitting = false);
+        return;
+      }
+
+      final isActive = _drive.isActive;
       if (!isActive) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -236,6 +252,7 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
             ),
           );
         }
+        setState(() => _isSubmitting = false);
         return;
       }
 
@@ -568,16 +585,26 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
     final attachedResume = (appRecord?.rawData['resume_version_url'] as String?) ?? profile?.resumeUrl;
 
     final driveStatus = _drive.status.toLowerCase();
-    final isClosed = driveStatus == 'closed' ||
-        driveStatus == 'completed' ||
-        driveStatus == 'cancelled' ||
-        !_drive.applicationDeadline.isAfter(DateTime.now());
+    final isUpcoming = _drive.isUpcoming;
+    final isClosed = _drive.isClosed;
 
     final daysLeft = _drive.applicationDeadline.difference(DateTime.now()).inDays;
-    final deadlineLabel = isClosed ? 'Registration Closed' : (daysLeft > 0 ? '$daysLeft days left' : 'Closing today');
-    final statusColor = !isClosed && (driveStatus == 'open' || driveStatus == 'active' || driveStatus == 'ongoing')
-        ? brandTheme.statusShortlisted
-        : (isClosed ? brandTheme.statusRejected : brandTheme.brassPrimary);
+    final String deadlineLabel;
+    if (isUpcoming) {
+      deadlineLabel = _drive.startDate != null
+          ? 'Opens ${DateFormat('dd MMM yyyy').format(_drive.startDate!)}'
+          : 'Applications Opening Soon';
+    } else if (isClosed) {
+      deadlineLabel = 'Registration Closed';
+    } else {
+      deadlineLabel = daysLeft > 0 ? '$daysLeft days left' : 'Closing today';
+    }
+
+    final statusColor = isUpcoming
+        ? Colors.amber.shade800
+        : (!isClosed && (driveStatus == 'open' || driveStatus == 'active' || driveStatus == 'ongoing')
+            ? brandTheme.statusShortlisted
+            : (isClosed ? brandTheme.statusRejected : brandTheme.brassPrimary));
 
     return PopScope(
       canPop: false,
@@ -617,6 +644,62 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Upcoming Informational Banner ───────────────────────────
+            if (isUpcoming) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.sp4),
+                margin: const EdgeInsets.only(bottom: AppSpacing.sp3),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
+                  border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.hourglass_top_rounded, color: Colors.amber.shade800, size: 22),
+                    const SizedBox(width: AppSpacing.sp3),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'UPCOMING RECRUITMENT DRIVE',
+                            style: GoogleFonts.ibmPlexMono(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: Colors.amber.shade900,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Applications have not opened yet. Review the eligibility requirements, job role, and package details below before registrations go live.',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurface,
+                              height: 1.4,
+                            ),
+                          ),
+                          if (_drive.startDate != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              'Applications Open: ${DateFormat('dd MMMM yyyy, hh:mm a').format(_drive.startDate!)}',
+                              style: GoogleFonts.ibmPlexMono(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.amber.shade900,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             // ── Company Header ──────────────────────────────────────────
             _sectionCard(
               theme: theme,
@@ -651,12 +734,17 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.15),
+                      color: isUpcoming ? Colors.amber.withValues(alpha: 0.15) : statusColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(100),
+                      border: isUpcoming ? Border.all(color: Colors.amber.withValues(alpha: 0.4)) : null,
                     ),
                     child: Text(
-                      isClosed ? 'CLOSED' : _drive.status.toUpperCase(),
-                      style: GoogleFonts.ibmPlexMono(fontSize: 10, fontWeight: FontWeight.w700, color: statusColor),
+                      isUpcoming ? 'UPCOMING' : (isClosed ? 'CLOSED' : _drive.status.toUpperCase()),
+                      style: GoogleFonts.ibmPlexMono(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: isUpcoming ? Colors.amber.shade800 : statusColor,
+                      ),
                     ),
                   ),
                 ],
@@ -831,7 +919,7 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
             ],
 
             // ── Application Form & Consent (Only shown if NOT already applied and drive is active) ──
-            if (!alreadyApplied && !isClosed) ...[
+            if (!alreadyApplied && !isClosed && !isUpcoming) ...[
               const SizedBox(height: AppSpacing.sp4),
 
               // ── Eligibility Verification ──────────────────────────────
@@ -1037,6 +1125,59 @@ class _DriveDetailsScreenState extends ConsumerState<DriveDetailsScreen> {
                   ),
                 ],
               )
+            : isUpcoming
+                ? Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            if (context.canPop()) {
+                              context.pop();
+                            } else {
+                              context.go('/student');
+                            }
+                          },
+                          child: Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: brandTheme.cardBorder),
+                              borderRadius: BorderRadius.circular(AppShapes.radiusSmall),
+                            ),
+                            child: Center(
+                              child: Text('Back', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: brandTheme.textMuted)),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sp3),
+                      Expanded(
+                        flex: 2,
+                        child: Container(
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withValues(alpha: 0.15),
+                            border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+                            borderRadius: BorderRadius.circular(AppShapes.radiusSmall),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.hourglass_top_rounded, size: 16, color: Colors.amber.shade800),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Upcoming · Opening Soon',
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.amber.shade800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
             : isClosed
                 ? Row(
                     children: [

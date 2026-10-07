@@ -56,5 +56,5 @@ app.*.map.json
 *.env
 *service-account*.json
 firebase-adminsdk*.json
-*.owner_backup
-
+# Screenshots & temporary dumps
+flutter_*.png

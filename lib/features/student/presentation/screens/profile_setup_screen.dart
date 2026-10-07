@@ -57,6 +57,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   final _personalFormKey = GlobalKey<FormState>();
   final _academicFormKey = GlobalKey<FormState>();
   final _educationFormKey = GlobalKey<FormState>();
+  final _resumeFormKey = GlobalKey<FormState>();
 
   // Step 1 — Personal
   late final TextEditingController _nameController;
@@ -83,11 +84,13 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   late final TextEditingController _cgpaController;
   late final TextEditingController _backlogsController;
 
-  // Step 4 — Resume
+  // Step 4 — Resume & Professional Links
   Uint8List? _resumeBytes;
   String? _resumeFileName;
   String? _existingResumeUrl;
   int? _resumeFileSize;
+  late final TextEditingController _linkedinController;
+  late final TextEditingController _githubController;
 
   // Step 5 — Consents & Declarations (unchecked by default)
   bool _agreedToPolicy = false;
@@ -115,6 +118,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     _pucController = TextEditingController();
     _cgpaController = TextEditingController();
     _backlogsController = TextEditingController(text: '0');
+    _linkedinController = TextEditingController();
+    _githubController = TextEditingController();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final profile = widget.targetStudent ?? ref.read(authNotifierProvider).valueOrNull;
@@ -128,8 +133,17 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       final metaUsn = authUser?.userMetadata?['roll_number'] as String? ??
           authUser?.userMetadata?['usn'] as String? ??
           '';
+      final metaLinkedin = authUser?.userMetadata?['linkedin_url'] as String? ?? '';
+      final metaGithub = authUser?.userMetadata?['github_url'] as String? ?? '';
 
       if (profile != null) {
+        final effectiveLinkedin = (profile.linkedinUrl != null && profile.linkedinUrl!.isNotEmpty)
+            ? profile.linkedinUrl!
+            : (widget.targetStudent == null ? metaLinkedin : '');
+        final effectiveGithub = (profile.githubUrl != null && profile.githubUrl!.isNotEmpty)
+            ? profile.githubUrl!
+            : (widget.targetStudent == null ? metaGithub : '');
+
         setState(() {
           _profile = profile;
           _nameController.text = profile.name.isNotEmpty && profile.name != 'User'
@@ -155,14 +169,18 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               profile.cgpa != null ? '${profile.cgpa}' : '';
           _backlogsController.text = '${profile.activeBacklogs}';
           _existingResumeUrl = profile.resumeUrl;
+          _linkedinController.text = effectiveLinkedin;
+          _githubController.text = effectiveGithub;
         });
         if (_usnController.text.isNotEmpty) {
           _recognizeBranchFromUsn(_usnController.text);
         }
-      } else if (metaName.isNotEmpty || metaUsn.isNotEmpty) {
+      } else if (metaName.isNotEmpty || metaUsn.isNotEmpty || metaLinkedin.isNotEmpty || metaGithub.isNotEmpty) {
         setState(() {
           _nameController.text = metaName;
           _usnController.text = metaUsn;
+          _linkedinController.text = metaLinkedin;
+          _githubController.text = metaGithub;
         });
         if (metaUsn.isNotEmpty) {
           _recognizeBranchFromUsn(metaUsn);
@@ -180,6 +198,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     _pucController.dispose();
     _cgpaController.dispose();
     _backlogsController.dispose();
+    _linkedinController.dispose();
+    _githubController.dispose();
     super.dispose();
   }
 
@@ -246,6 +266,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     if (_currentStep == 1 && !_academicFormKey.currentState!.validate()) return;
     if (_currentStep == 2 && !_educationFormKey.currentState!.validate()) return;
     if (_currentStep == 3) {
+      if (!_resumeFormKey.currentState!.validate()) return;
       if (_resumeBytes == null && (_existingResumeUrl == null || _existingResumeUrl!.isEmpty)) {
         _showSnack('Please upload your resume before continuing.', isError: true);
         return;
@@ -280,6 +301,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     if (_currentStep == 1 && !_academicFormKey.currentState!.validate()) return;
     if (_currentStep == 2 && !_educationFormKey.currentState!.validate()) return;
     if (_currentStep == 3) {
+      if (!_resumeFormKey.currentState!.validate()) return;
       if (_resumeBytes == null && (_existingResumeUrl == null || _existingResumeUrl!.isEmpty)) {
         _showSnack('Please upload your resume before saving.', isError: true);
         return;
@@ -660,6 +682,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       resumeBytes: _resumeBytes,
       resumeFileName: _resumeFileName,
       existingResumeUrl: _existingResumeUrl,
+      linkedinUrl: _normalizeUrl(_linkedinController.text.trim()),
+      githubUrl: _normalizeUrl(_githubController.text.trim()),
     );
 
     final isCoordinatorEditingStudent = widget.targetStudent != null;
@@ -714,7 +738,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       'Personal Information',
       'Academic Details',
       'Education & Scores',
-      'Resume Upload',
+      'Resume & Professional Links',
       'Review & Submit',
     ];
 
@@ -1471,197 +1495,259 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     );
   }
 
-  // ── Step 4: Resume ────────────────────────────────────────────────────────
+  String? _validateLinkedIn(String? v) {
+    if (v == null || v.trim().isEmpty) return null;
+    final val = v.trim();
+    final uri = Uri.tryParse(val.startsWith('http://') || val.startsWith('https://') ? val : 'https://$val');
+    if (uri == null || uri.host.isEmpty || !uri.host.toLowerCase().contains('linkedin.com')) {
+      return 'Enter a valid LinkedIn profile URL (e.g. https://linkedin.com/in/username)';
+    }
+    return null;
+  }
+
+  String? _validateGitHub(String? v) {
+    if (v == null || v.trim().isEmpty) return null;
+    final val = v.trim();
+    final uri = Uri.tryParse(val.startsWith('http://') || val.startsWith('https://') ? val : 'https://$val');
+    if (uri == null || uri.host.isEmpty || !uri.host.toLowerCase().contains('github.com')) {
+      return 'Enter a valid GitHub profile URL (e.g. https://github.com/username)';
+    }
+    return null;
+  }
+
+  String? _normalizeUrl(String? url) {
+    if (url == null || url.trim().isEmpty) return null;
+    var trimmed = url.trim();
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      trimmed = 'https://$trimmed';
+    }
+    return trimmed;
+  }
+
+  // ── Step 4: Resume & Professional Links ───────────────────────────────────
 
   Widget _buildStep4Resume(ThemeData theme, AppBrandTheme brandTheme) {
     final hasResume = _resumeBytes != null || _existingResumeUrl != null;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SectionHeader(
-          icon: Icons.description_rounded,
-          title: 'Resume',
-          description: 'Upload your resume in PDF format. This will be visible to companies during placement drives.',
-          brandTheme: brandTheme,
-        ),
-        const SizedBox(height: AppSpacing.sp5),
+    return Form(
+      key: _resumeFormKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(
+            icon: Icons.description_rounded,
+            title: 'Resume & Professional Links',
+            description: 'Upload your resume in PDF format and add your professional profiles for placement drives.',
+            brandTheme: brandTheme,
+          ),
+          const SizedBox(height: AppSpacing.sp5),
 
-        if (hasResume) ...[
-          // Resume card with details
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(AppSpacing.sp4),
-            decoration: BoxDecoration(
-              color: brandTheme.brassSoft.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
-              border: Border.all(
-                color: brandTheme.brassPrimary.withValues(alpha: 0.3),
-              ),
-            ),
-            child: Column(
-              children: [
-                // PDF icon + info
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(AppSpacing.sp3),
-                      decoration: BoxDecoration(
-                        color: brandTheme.brassPrimary.withValues(alpha: 0.12),
-                        borderRadius:
-                            BorderRadius.circular(AppShapes.radiusSmall),
-                      ),
-                      child: Icon(Icons.picture_as_pdf_rounded,
-                          size: 28, color: brandTheme.brassPrimary),
-                    ),
-                    const SizedBox(width: AppSpacing.sp3),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _resumeFileName ??
-                                (_existingResumeUrl != null
-                                    ? FileNameExtractor.extract(_existingResumeUrl!)
-                                    : 'Resume'),
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            _resumeFileSize != null
-                                ? _formatFileSize(_resumeFileSize)
-                                : 'PDF Document',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: brandTheme.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sp2,
-                          vertical: AppSpacing.sp1),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check_circle_rounded,
-                              size: 12, color: Colors.green.shade600),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Uploaded',
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.green.shade700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+          _label('RESUME (PDF DOCUMENT)', brandTheme),
+          const SizedBox(height: 4),
+
+          if (hasResume) ...[
+            // Resume card with details
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.sp4),
+              decoration: BoxDecoration(
+                color: brandTheme.brassSoft.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
+                border: Border.all(
+                  color: brandTheme.brassPrimary.withValues(alpha: 0.3),
                 ),
-                const SizedBox(height: AppSpacing.sp4),
+              ),
+              child: Column(
+                children: [
+                  // PDF icon + info
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(AppSpacing.sp3),
+                        decoration: BoxDecoration(
+                          color: brandTheme.brassPrimary.withValues(alpha: 0.12),
+                          borderRadius:
+                              BorderRadius.circular(AppShapes.radiusSmall),
+                        ),
+                        child: Icon(Icons.picture_as_pdf_rounded,
+                            size: 28, color: brandTheme.brassPrimary),
+                      ),
+                      const SizedBox(width: AppSpacing.sp3),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _resumeFileName ??
+                                  (_existingResumeUrl != null
+                                      ? FileNameExtractor.extract(_existingResumeUrl!)
+                                      : 'Resume'),
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _resumeFileSize != null
+                                  ? _formatFileSize(_resumeFileSize)
+                                  : 'PDF Document',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: brandTheme.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sp2,
+                            vertical: AppSpacing.sp1),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_circle_rounded,
+                                size: 12, color: Colors.green.shade600),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Uploaded',
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sp4),
 
-                // Action buttons
-                Row(
-                  children: [
-                    if (_existingResumeUrl != null)
+                  // Action buttons
+                  Row(
+                    children: [
+                      if (_existingResumeUrl != null)
+                        Expanded(
+                          child: _ResumeActionButton(
+                            label: 'View',
+                            icon: Icons.open_in_new_rounded,
+                            onTap: () async {
+                              final url = Uri.parse(_existingResumeUrl!);
+                              if (await canLaunchUrl(url)) {
+                                await launchUrl(url, mode: LaunchMode.externalApplication);
+                              }
+                            },
+                            brandTheme: brandTheme,
+                            theme: theme,
+                          ),
+                        ),
+                      if (_existingResumeUrl != null)
+                        const SizedBox(width: AppSpacing.sp2),
                       Expanded(
                         child: _ResumeActionButton(
-                          label: 'View',
-                          icon: Icons.open_in_new_rounded,
-                          onTap: () async {
-                            final url = Uri.parse(_existingResumeUrl!);
-                            if (await canLaunchUrl(url)) {
-                              await launchUrl(url, mode: LaunchMode.externalApplication);
-                            }
-                          },
+                          label: 'Replace',
+                          icon: Icons.swap_horiz_rounded,
+                          onTap: _pickResume,
                           brandTheme: brandTheme,
                           theme: theme,
                         ),
                       ),
-                    if (_existingResumeUrl != null)
                       const SizedBox(width: AppSpacing.sp2),
-                    Expanded(
-                      child: _ResumeActionButton(
-                        label: 'Replace',
-                        icon: Icons.swap_horiz_rounded,
-                        onTap: _pickResume,
-                        brandTheme: brandTheme,
-                        theme: theme,
+                      Expanded(
+                        child: _ResumeActionButton(
+                          label: 'Delete',
+                          icon: Icons.delete_outline_rounded,
+                          onTap: _deleteResume,
+                          isDestructive: true,
+                          brandTheme: brandTheme,
+                          theme: theme,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: AppSpacing.sp2),
-                    Expanded(
-                      child: _ResumeActionButton(
-                        label: 'Delete',
-                        icon: Icons.delete_outline_rounded,
-                        onTap: _deleteResume,
-                        isDestructive: true,
-                        brandTheme: brandTheme,
-                        theme: theme,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ] else ...[
-          // Upload box
-          GestureDetector(
-            onTap: _pickResume,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                  vertical: AppSpacing.sp7, horizontal: AppSpacing.sp5),
-              decoration: BoxDecoration(
-                color: brandTheme.surfaceAlt,
-                borderRadius:
-                    BorderRadius.circular(AppShapes.radiusStandard),
-                border: Border.all(
-                  color: brandTheme.cardBorder,
-                  width: 1.5,
-                  style: BorderStyle.solid,
-                ),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.cloud_upload_rounded,
-                      size: 44, color: brandTheme.textMuted),
-                  const SizedBox(height: AppSpacing.sp3),
-                  Text(
-                    'Tap to upload PDF',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sp1),
-                  Text(
-                    'PDF only',
-                    style: GoogleFonts.inter(
-                        fontSize: 11, color: brandTheme.textMuted),
+                    ],
                   ),
                 ],
               ),
             ),
+          ] else ...[
+            // Upload box
+            GestureDetector(
+              onTap: _pickResume,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                    vertical: AppSpacing.sp7, horizontal: AppSpacing.sp5),
+                decoration: BoxDecoration(
+                  color: brandTheme.surfaceAlt,
+                  borderRadius:
+                      BorderRadius.circular(AppShapes.radiusStandard),
+                  border: Border.all(
+                    color: brandTheme.cardBorder,
+                    width: 1.5,
+                    style: BorderStyle.solid,
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.cloud_upload_rounded,
+                        size: 44, color: brandTheme.textMuted),
+                    const SizedBox(height: AppSpacing.sp3),
+                    Text(
+                      'Tap to upload PDF',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sp1),
+                    Text(
+                      'PDF only',
+                      style: GoogleFonts.inter(
+                          fontSize: 11, color: brandTheme.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: AppSpacing.sp5),
+          const SubtleDivider(height: 1),
+          const SizedBox(height: AppSpacing.sp5),
+
+          _label('LINKEDIN PROFILE URL (OPTIONAL)', brandTheme),
+          TextFormField(
+            controller: _linkedinController,
+            keyboardType: TextInputType.url,
+            decoration: InputDecoration(
+              hintText: 'https://linkedin.com/in/your-profile',
+              prefixIcon: Icon(Icons.link_rounded, color: brandTheme.brassPrimary),
+            ),
+            validator: _validateLinkedIn,
+          ),
+          const SizedBox(height: AppSpacing.sp4),
+
+          _label('GITHUB PROFILE URL (OPTIONAL)', brandTheme),
+          TextFormField(
+            controller: _githubController,
+            keyboardType: TextInputType.url,
+            decoration: InputDecoration(
+              hintText: 'https://github.com/your-username',
+              prefixIcon: Icon(Icons.code_rounded, color: brandTheme.brassPrimary),
+            ),
+            validator: _validateGitHub,
           ),
         ],
-      ],
+      ),
     );
   }
 
@@ -1750,19 +1836,21 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         ),
         const SizedBox(height: AppSpacing.sp3),
 
-        // Resume card
+        // Resume & Links card
         _ReviewCard(
-          title: 'Resume',
+          title: 'Resume & Professional Links',
           icon: Icons.description_rounded,
           onTap: () => _jumpToStep(3),
           brandTheme: brandTheme,
           theme: theme,
           rows: [
-            ('Status', hasResume ? 'Ready to upload' : 'No resume uploaded'),
+            ('Resume Status', hasResume ? 'Ready to upload' : 'No resume uploaded'),
             if (hasResume && _resumeFileName != null)
               ('File', _resumeFileName!),
             if (hasResume && _resumeFileName == null && _existingResumeUrl != null)
               ('File', FileNameExtractor.extract(_existingResumeUrl!)),
+            ('LinkedIn', _linkedinController.text.trim().isNotEmpty ? _linkedinController.text.trim() : 'Not provided'),
+            ('GitHub', _githubController.text.trim().isNotEmpty ? _githubController.text.trim() : 'Not provided'),
           ],
         ),
         const SizedBox(height: AppSpacing.sp4),

@@ -119,6 +119,8 @@ class UserProfile {
   final String? resumeUrl;
   final String? photoUrl;
   final String? idProofUrl;
+  final String? linkedinUrl;
+  final String? githubUrl;
   final List<String> skills;
   final int? semester;
   final String? section;
@@ -167,6 +169,8 @@ class UserProfile {
     this.resumeUrl,
     this.photoUrl,
     this.idProofUrl,
+    this.linkedinUrl,
+    this.githubUrl,
     this.skills = const [],
     this.semester,
     this.section,
@@ -197,6 +201,7 @@ class UserProfile {
   // Helper alias for existing UI code compatibility
   String get fullName => name;
   String? get rollNumber => usn;
+  String? get avatarUrl => photoUrl;
 
   /// Returns the effective authorized course code (verified preferred, fallback to detected or parsed USN).
   String get effectiveCourseCode =>
@@ -221,8 +226,10 @@ class UserProfile {
       cgpa: (map['cgpa'] as num?)?.toDouble(),
       activeBacklogs: map['active_backlogs'] as int? ?? 0,
       resumeUrl: map['resume_url'] as String?,
-      photoUrl: map['photo_url'] as String?,
+      photoUrl: (map['photo_url'] ?? map['avatar_url']) as String?,
       idProofUrl: map['id_proof_url'] as String?,
+      linkedinUrl: map['linkedin_url'] as String?,
+      githubUrl: map['github_url'] as String?,
       skills: (map['skills'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
       semester: map['semester'] as int?,
       section: map['section'] as String?,
@@ -267,6 +274,8 @@ class UserProfile {
         'resume_url': resumeUrl,
         'photo_url': photoUrl,
         'id_proof_url': idProofUrl,
+        'linkedin_url': linkedinUrl,
+        'github_url': githubUrl,
         'skills': skills,
         'detected_course_id': detectedCourseId,
         'detected_course_code': detectedCourseCode,

@@ -73,7 +73,7 @@ class TpoRepositoryImpl implements TpoRepository {
           .maybeSingle();
 
       if (profile != null && profile['email'] != null && _emailService != null) {
-        _emailService!.sendFacultyAppointmentEmail(
+        _emailService.sendFacultyAppointmentEmail(
           recipientEmail: profile['email'] as String,
           facultyName: (profile['name'] as String?) ?? 'Faculty Member',
           department: department,
@@ -95,10 +95,39 @@ class TpoRepositoryImpl implements TpoRepository {
 
   @override
   Future<List<Map<String, dynamic>>> fetchFacultyCoordinators() async {
-    final response = await _supabase
-        .from('faculty_coordinators')
-        .select('*, profile:profiles!faculty_coordinators_profile_id_fkey(name, email, phone)');
-    return List<Map<String, dynamic>>.from(response);
+    try {
+      final response = await _supabase
+          .from('faculty_coordinators')
+          .select('*, profile:profiles!faculty_coordinators_profile_id_fkey(name, email, phone, photo_url)');
+      final list = List<Map<String, dynamic>>.from(response);
+      return list;
+    } catch (_) {
+      try {
+        final response = await _supabase
+            .from('faculty_coordinators')
+            .select('*, profile:profiles!profile_id(name, email, phone, photo_url)');
+        return List<Map<String, dynamic>>.from(response);
+      } catch (_) {
+        try {
+          final coords = await _supabase.from('faculty_coordinators').select();
+          final list = List<Map<String, dynamic>>.from(coords);
+          for (var c in list) {
+            final pId = c['profile_id'];
+            if (pId != null) {
+              final prof = await _supabase
+                  .from('profiles')
+                  .select('name, email, phone, photo_url')
+                  .eq('id', pId)
+                  .maybeSingle();
+              if (prof != null) c['profile'] = prof;
+            }
+          }
+          return list;
+        } catch (_) {
+          return [];
+        }
+      }
+    }
   }
 
   @override
@@ -288,7 +317,7 @@ class TpoRepositoryImpl implements TpoRepository {
                 final sid = s['id'] as String?;
                 if (sid != null && sid.isNotEmpty) studentIds.add(sid);
                 if (email != null && email.isNotEmpty) {
-                  _emailService!.sendDrivePublishedEmail(
+                  _emailService.sendDrivePublishedEmail(
                     recipientEmail: email,
                     studentName: name,
                     companyName: companyName,
@@ -337,7 +366,7 @@ class TpoRepositoryImpl implements TpoRepository {
                 final sid = a['student_id'] as String?;
                 if (sid != null && sid.isNotEmpty) studentIds.add(sid);
                 if (email != null && email.isNotEmpty) {
-                  _emailService!.sendDriveCancelledEmail(
+                  _emailService.sendDriveCancelledEmail(
                     recipientEmail: email,
                     companyName: companyName,
                     reason: 'Drive status updated to cancelled by TPO.',
@@ -511,24 +540,118 @@ class TpoRepositoryImpl implements TpoRepository {
 
   @override
   Future<List<Drive>> getDrives() async {
+    // Background sync: auto-close expired drives & auto-delete drives past 1 week deadline
+    try {
+      _supabase.rpc('auto_update_drive_statuses').ignore();
+    } catch (_) {}
+
     try {
       final response = await _supabase
           .from('drives')
-          .select('*, company:companies(*), drive_rounds(*)')
+          .select('*, company:companies!company_id(id, name), drive_rounds(*)')
           .order('created_at', ascending: false);
-      return (response as List).map((map) => Drive.fromMap(map)).toList();
+      return (response as List)
+          .map((map) => Drive.fromMap(map as Map<String, dynamic>))
+          .where((d) => !d.isDeleted)
+          .toList();
     } catch (e) {
       try {
-        // Fallback: fetch drives without nested drive_rounds if join schema fails
         final fallback = await _supabase
             .from('drives')
-            .select('*, company:companies(*)')
+            .select('*, company:companies!company_id(id, name)')
             .order('created_at', ascending: false);
-        return (fallback as List).map((map) => Drive.fromMap(map)).toList();
+        return (fallback as List)
+            .map((map) => Drive.fromMap(map as Map<String, dynamic>))
+            .where((d) => !d.isDeleted)
+            .toList();
       } catch (err) {
-        return _localDriveCache;
+        try {
+          final fallback2 = await _supabase
+              .from('drives')
+              .select('*, companies(name)')
+              .order('created_at', ascending: false);
+          return (fallback2 as List)
+              .map((map) => Drive.fromMap(map as Map<String, dynamic>))
+              .where((d) => !d.isDeleted)
+              .toList();
+        } catch (_) {
+          try {
+            final minimalFallback = await _supabase
+                .from('drives')
+                .select('*')
+                .order('created_at', ascending: false);
+            return (minimalFallback as List)
+                .map((map) => Drive.fromMap(map as Map<String, dynamic>))
+                .where((d) => !d.isDeleted)
+                .toList();
+          } catch (_) {
+            return _localDriveCache.where((d) => !d.isDeleted).toList();
+          }
+        }
       }
     }
+  }
+
+  @override
+  Future<void> deleteDrive(String driveId) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      throw Exception('Authentication required to delete a placement drive.');
+    }
+
+    // Role verification (Application layer) - safe check
+    try {
+      final profileRes = await _supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      final role = (profileRes?['role'] as String?)?.toLowerCase().trim();
+      if (role != null && role.isNotEmpty && role != 'tpo' && role != 'admin') {
+        throw Exception('You do not have permission to delete this drive.');
+      }
+    } catch (e) {
+      if (e.toString().contains('permission')) rethrow;
+    }
+
+    // 1. Try soft-delete with deleted_at and deleted_by
+    try {
+      await _supabase.from('drives').update({
+        'deleted_at': DateTime.now().toIso8601String(),
+        'deleted_by': user.id,
+        'status': 'cancelled',
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', driveId);
+    } catch (e) {
+      // 2. If deleted_at column does not exist on remote DB yet, update status to cancelled
+      try {
+        await _supabase.from('drives').update({
+          'status': 'cancelled',
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', driveId);
+      } catch (e2) {
+        // 3. Fallback: try direct row deletion if allowed by RLS
+        try {
+          await _supabase.from('drives').delete().eq('id', driveId);
+        } catch (e3) {
+          // ignore: avoid_print
+          print('⚠️ [TpoRepository] Delete drive DB attempts failed: $e3');
+        }
+      }
+    }
+
+    // Remove from local memory cache
+    _localDriveCache.removeWhere((d) => d.id == driveId);
+
+    try {
+      await _auditLogRepo.logAction(
+        action: AuditAction.other,
+        description: 'Deleted placement drive: $driveId',
+        targetId: driveId,
+        targetTable: 'drives',
+      );
+    } catch (_) {}
   }
 
   @override
@@ -579,7 +702,7 @@ class TpoRepositoryImpl implements TpoRepository {
   Future<List<Map<String, dynamic>>> fetchDriveAttendance(String driveId) async {
     final response = await _supabase
         .from('drive_attendance')
-        .select('*, profile:profiles!drive_attendance_student_id_fkey(name, email, usn, department)')
+        .select('*, profile:profiles!drive_attendance_student_id_fkey(name, email, usn, department, photo_url)')
         .eq('drive_id', driveId)
         .order('scanned_at', ascending: false);
 
@@ -930,7 +1053,7 @@ class TpoRepositoryImpl implements TpoRepository {
 
           if (studentProfile != null && studentProfile['email'] != null && driveInfo != null) {
             final compName = (driveInfo['company'] is Map ? (driveInfo['company'] as Map)['name'] : null) ?? 'Company';
-            _emailService!.sendRoundQualifiedEmail(
+            _emailService.sendRoundQualifiedEmail(
               recipientEmail: studentProfile['email'] as String,
               studentName: (studentProfile['name'] as String?) ?? 'Student',
               companyName: compName,
@@ -1025,7 +1148,7 @@ class TpoRepositoryImpl implements TpoRepository {
             final dept = studentProfile['department'] as String?;
 
             if (_emailService != null && studentProfile['email'] != null) {
-              _emailService!.sendOfferReleasedEmail(
+              _emailService.sendOfferReleasedEmail(
                 recipientEmail: studentProfile['email'] as String,
                 studentName: studentName,
                 companyName: compName,
@@ -1146,7 +1269,7 @@ class TpoRepositoryImpl implements TpoRepository {
 
           if (studentProfile != null && studentProfile['email'] != null && driveInfo != null) {
             final compName = (driveInfo['company'] is Map ? (driveInfo['company'] as Map)['name'] : null) ?? 'Company';
-            _emailService!.sendRoundRejectedEmail(
+            _emailService.sendRoundRejectedEmail(
               recipientEmail: studentProfile['email'] as String,
               studentName: (studentProfile['name'] as String?) ?? 'Student',
               companyName: compName,
@@ -1374,7 +1497,7 @@ class TpoRepositoryImpl implements TpoRepository {
           final email = s['email'] as String?;
           final name = (s['name'] as String?) ?? 'Student';
           if (email != null && email.isNotEmpty) {
-            _emailService!.sendReminderEmail(
+            _emailService.sendReminderEmail(
               recipientEmail: email,
               studentName: name,
               reminderTitle: 'Drive Deadline Reminder: $compName',

@@ -13,6 +13,7 @@ import '../../../../shared/presentation/widgets/subtle_divider.dart';
 import '../../../student/domain/entities/drive.dart';
 import '../providers/tpo_provider.dart';
 import 'attendance_export_dialog.dart';
+import '../../../../shared/presentation/widgets/profile_avatar.dart';
 
 class DriveQrCodeModal extends ConsumerStatefulWidget {
   final Drive drive;
@@ -432,15 +433,11 @@ class _DriveQrCodeModalState extends ConsumerState<DriveQrCodeModal>
                                       ),
                                       child: Row(
                                         children: [
-                                          CircleAvatar(
-                                            backgroundColor:
-                                                accent.withValues(alpha: 0.1),
-                                            child: Text(
-                                              '${index + 1}',
-                                              style: GoogleFonts.ibmPlexMono(
-                                                  fontWeight: FontWeight.bold,
-                                                  color: accent),
-                                            ),
+                                          ProfileAvatar(
+                                            imageUrl: ((rec['profile'] as Map<String, dynamic>?)?['photo_url'] ?? (rec['profile'] as Map<String, dynamic>?)?['avatar_url']) as String?,
+                                            name: name,
+                                            size: ProfileAvatarSize.small,
+                                            customRadius: 18,
                                           ),
                                           const SizedBox(width: 12),
                                           Expanded(

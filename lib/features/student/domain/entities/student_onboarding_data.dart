@@ -31,12 +31,14 @@ class StudentOnboardingData {
   final double cgpa;
   final int activeBacklogs;
 
-  // ── Step 4: Resume ───────────────────────────────────────────────────────
+  // ── Step 4: Resume & Professional Links ───────────────────────────────────
   /// Bytes of the selected resume PDF (null if not selected or already uploaded).
   final Uint8List? resumeBytes;
   final String? resumeFileName;
   /// Already-uploaded resume URL (when editing existing profile).
   final String? existingResumeUrl;
+  final String? linkedinUrl;
+  final String? githubUrl;
 
   const StudentOnboardingData({
     required this.fullName,
@@ -61,5 +63,7 @@ class StudentOnboardingData {
     this.resumeBytes,
     this.resumeFileName,
     this.existingResumeUrl,
+    this.linkedinUrl,
+    this.githubUrl,
   });
 }

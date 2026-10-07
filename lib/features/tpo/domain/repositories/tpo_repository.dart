@@ -60,6 +60,8 @@ abstract class TpoRepository {
     DateTime? applicationDeadline,
   });
 
+  Future<void> deleteDrive(String driveId);
+
   Future<void> updateApplicationStatus({
     required String applicationId,
     required ApplicationStatus status,

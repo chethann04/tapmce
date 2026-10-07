@@ -98,9 +98,10 @@ class StudentAttendanceRemoteDataSource {
     final nowIso = scannedAtIso ?? DateTime.now().toUtc().toIso8601String();
 
     // Dispatch attendance confirmation email
-    if (_emailService != null && profile['email'] != null) {
+    final emailService = _emailService;
+    if (emailService != null && profile['email'] != null) {
       try {
-        _emailService.sendAttendanceConfirmationEmail(
+        emailService.sendAttendanceConfirmationEmail(
           recipientEmail: profile['email'] as String,
           companyName: companyName.isNotEmpty ? companyName : 'Placement Drive',
           date: nowIso.split('T')[0],

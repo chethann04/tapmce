@@ -14,7 +14,7 @@ final pushNotificationServiceProvider = Provider<PushNotificationService>((ref) 
 });
 
 @pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -77,7 +77,7 @@ class PushNotificationService {
       );
       _isFirebaseInitialized = true;
 
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
       // Setup Local Notifications
       const AndroidInitializationSettings initializationSettingsAndroid =
@@ -294,6 +294,18 @@ class PushNotificationService {
         'updated_at': now,
       }, onConflict: 'user_id,fcm_token');
 
+      // Purge any older tokens for this user on this platform to prevent mismatched token accumulation
+      try {
+        await _supabase
+            .from('fcm_tokens')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('device_type', platform)
+            .neq('fcm_token', token);
+      } catch (cleanErr) {
+        debugPrint('[FCM] Token cleanup notice: $cleanErr');
+      }
+
       _isTokenStoredInSupabase = true;
       _tokenRegistrationStatus = 'SUCCESS';
       debugPrint('[FCM] FCM TOKEN UPSERT SUCCESS');
@@ -379,6 +391,7 @@ class PushNotificationService {
       channelDescription: 'Used for important recruitment and drive updates',
       importance: Importance.max,
       priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
       ticker: 'ticker',
       playSound: true,
       enableVibration: true,
@@ -409,7 +422,10 @@ class PushNotificationService {
         channelDescription: 'Used for important recruitment and drive updates',
         importance: Importance.max,
         priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
         ticker: 'ticker',
+        playSound: true,
+        enableVibration: true,
       );
       const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
 

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import '../../../../shared/presentation/widgets/subtle_divider.dart';
+import '../../../../shared/presentation/widgets/profile_avatar.dart';
 
 class ApplicantListScreen extends ConsumerStatefulWidget {
   const ApplicantListScreen({super.key});
@@ -172,7 +173,12 @@ class _ApplicantListScreenState extends ConsumerState<ApplicantListScreen> {
                       }
 
                       return ListTile(
-                        leading: CircleAvatar(child: Text(app['name'].substring(0, 1))),
+                        leading: ProfileAvatar(
+                          imageUrl: app['photo_url'] as String?,
+                          name: app['name'] as String?,
+                          size: ProfileAvatarSize.small,
+                          customRadius: 20,
+                        ),
                         title: Text(app['name']),
                         subtitle: Text(app['usn']),
                         trailing: ConstrainedBox(

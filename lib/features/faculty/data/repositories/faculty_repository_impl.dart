@@ -28,35 +28,18 @@ class FacultyRepositoryImpl implements FacultyRepository {
   @override
   Future<List<UserProfile>> getPendingStudents({required String department}) async {
     final cleanDept = department.trim();
+    if (cleanDept.isEmpty) return [];
     
-    // First query: Fetch pending students for this faculty department
-    var query = _supabase
-        .from('profiles')
-        .select()
-        .eq('role', 'student')
-        .eq('approval_status', 'pending');
-
-    if (cleanDept.isNotEmpty) {
-      query = query.ilike('department', '%$cleanDept%');
-    }
-
-    final response = await query.order('created_at', ascending: false);
-
-    final list = (response as List)
-        .map((e) => UserProfile.fromMap(e as Map<String, dynamic>))
-        .toList();
-
-    if (list.isNotEmpty) return list;
-
-    // Fallback: If no match found by department substring, fetch all pending students so queue is never blocked
-    final fallbackResponse = await _supabase
+    // Fetch pending students for this faculty department
+    final response = await _supabase
         .from('profiles')
         .select()
         .eq('role', 'student')
         .eq('approval_status', 'pending')
+        .ilike('department', '%$cleanDept%')
         .order('created_at', ascending: false);
 
-    return (fallbackResponse as List)
+    return (response as List)
         .map((e) => UserProfile.fromMap(e as Map<String, dynamic>))
         .toList();
   }
@@ -64,32 +47,17 @@ class FacultyRepositoryImpl implements FacultyRepository {
   @override
   Future<List<UserProfile>> getVerifiedStudents({required String department}) async {
     final cleanDept = department.trim();
-    var query = _supabase
-        .from('profiles')
-        .select()
-        .eq('role', 'student')
-        .eq('approval_status', 'approved');
+    if (cleanDept.isEmpty) return [];
 
-    if (cleanDept.isNotEmpty) {
-      query = query.ilike('department', '%$cleanDept%');
-    }
-
-    final response = await query.order('updated_at', ascending: false);
-    final list = (response as List)
-        .map((e) => UserProfile.fromMap(e as Map<String, dynamic>))
-        .toList();
-
-    if (list.isNotEmpty) return list;
-
-    // Fallback: fetch all approved students if department name format differs
-    final fallbackResponse = await _supabase
+    final response = await _supabase
         .from('profiles')
         .select()
         .eq('role', 'student')
         .eq('approval_status', 'approved')
+        .ilike('department', '%$cleanDept%')
         .order('updated_at', ascending: false);
 
-    return (fallbackResponse as List)
+    return (response as List)
         .map((e) => UserProfile.fromMap(e as Map<String, dynamic>))
         .toList();
   }
@@ -97,31 +65,17 @@ class FacultyRepositoryImpl implements FacultyRepository {
   @override
   Future<List<UserProfile>> getRejectedStudents({required String department}) async {
     final cleanDept = department.trim();
-    var query = _supabase
-        .from('profiles')
-        .select()
-        .eq('role', 'student')
-        .eq('approval_status', 'rejected');
+    if (cleanDept.isEmpty) return [];
 
-    if (cleanDept.isNotEmpty) {
-      query = query.ilike('department', '%$cleanDept%');
-    }
-
-    final response = await query.order('updated_at', ascending: false);
-    final list = (response as List)
-        .map((e) => UserProfile.fromMap(e as Map<String, dynamic>))
-        .toList();
-
-    if (list.isNotEmpty) return list;
-
-    final fallbackResponse = await _supabase
+    final response = await _supabase
         .from('profiles')
         .select()
         .eq('role', 'student')
         .eq('approval_status', 'rejected')
+        .ilike('department', '%$cleanDept%')
         .order('updated_at', ascending: false);
 
-    return (fallbackResponse as List)
+    return (response as List)
         .map((e) => UserProfile.fromMap(e as Map<String, dynamic>))
         .toList();
   }
@@ -181,16 +135,17 @@ class FacultyRepositoryImpl implements FacultyRepository {
         final courseName = (studentData['verified_course_name'] ?? studentData['detected_course_name'] ?? studentData['department'] ?? 'UG Engineering') as String;
 
         // 1. Send Email
-        if (email.isNotEmpty && _emailService != null) {
+        final emailService = _emailService;
+        if (email.isNotEmpty && emailService != null) {
           if (status == ApprovalStatus.approved) {
-            _emailService.sendProfileApprovedEmail(
+            emailService.sendProfileApprovedEmail(
               recipientEmail: email,
               studentName: name,
               usn: usn,
               verifiedCourse: courseName,
             );
           } else if (status == ApprovalStatus.rejected) {
-            _emailService.sendProfileRejectedEmail(
+            emailService.sendProfileRejectedEmail(
               recipientEmail: email,
               studentName: name,
               reason: rejectionReason ?? 'Incorrect academic information. Please meet your coordinator.',

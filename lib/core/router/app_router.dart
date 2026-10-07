@@ -26,13 +26,13 @@ import '../../features/admin/presentation/screens/system_settings_screen.dart';
 import '../../features/admin/presentation/screens/course_management_screen.dart';
 import '../../features/faculty/presentation/screens/faculty_dashboard_screen.dart';
 import '../../features/faculty/presentation/screens/student_approval_queue_screen.dart';
-import '../../features/faculty/presentation/screens/faculty_waiting_screen.dart';
 import '../../features/faculty/presentation/screens/department_analytics_screen.dart';
 import '../../features/tpo/presentation/screens/tpo_dashboard_screen.dart';
 import '../../features/tpo/presentation/screens/drive_creation_wizard.dart';
 import '../../features/tpo/presentation/screens/applicant_list_screen.dart';
 import '../../features/tpo/presentation/screens/round_management_screen.dart';
 import '../../features/tpo/presentation/screens/student_progress_screen.dart';
+import '../../features/tpo/presentation/screens/tpo_profile_screen.dart';
 import '../theme/app_motion.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
@@ -171,15 +171,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         // Otherwise, if they are on an auth screen or splash, redirect to their dashboard
         if (isOnAuth) {
           return _dashboardPath(profile.role);
-        }
-
-        // Enforce strict role-based route authorization for Faculty approval
-        if (profile.role == UserRole.faculty &&
-            profile.approvalStatus != ApprovalStatus.approved) {
-          if (state.matchedLocation != '/faculty/waiting') {
-            return '/faculty/waiting';
-          }
-          return null; // Already on faculty waiting screen
         }
 
         // If they are on pending-approval but are approved, redirect to dashboard
@@ -394,11 +385,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/faculty/waiting',
         name: 'faculty-waiting',
-        pageBuilder: (context, state) => buildAppPageTransition(
-          context: context,
-          state: state,
-          child: const FacultyWaitingScreen(),
-        ),
+        redirect: (context, state) => '/faculty',
       ),
       GoRoute(
         path: '/faculty/analytics',
@@ -541,6 +528,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
+      GoRoute(
+        path: '/tpo/profile',
+        name: 'tpo-profile',
+        pageBuilder: (context, state) => buildAppPageTransition(
+          context: context,
+          state: state,
+          child: const Scaffold(
+            body: TpoProfileScreen(),
+          ),
+        ),
+      ),
     ],
     errorBuilder: (context, state) {
       debugPrint('[GoRouter] Route error: ${state.error} for uri: ${state.uri}');
@@ -578,9 +576,8 @@ String _dashboardPath(UserRole role) {
     case UserRole.student:
       return '/student';
     case UserRole.facultyCoordinator:
-      return '/faculty';
     case UserRole.faculty:
-      return '/faculty/waiting';
+      return '/faculty';
     case UserRole.admin:
       return '/admin';
     case UserRole.tpo:

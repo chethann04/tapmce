@@ -13,6 +13,23 @@ final studentDriveRepositoryProvider = Provider((ref) {
 
 final studentEligibleDrivesProvider = FutureProvider<List<Drive>>((ref) async {
   final repo = ref.watch(studentDriveRepositoryProvider);
+
+  final channel = Supabase.instance.client
+      .channel('student_drives_realtime_${DateTime.now().millisecondsSinceEpoch}')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'drives',
+        callback: (_) {
+          ref.invalidateSelf();
+        },
+      )
+      .subscribe();
+
+  ref.onDispose(() {
+    Supabase.instance.client.removeChannel(channel);
+  });
+
   try {
     return await repo.getEligibleDrives();
   } catch (e) {

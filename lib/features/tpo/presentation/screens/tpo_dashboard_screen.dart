@@ -1,3 +1,8 @@
+import 'dart:io';
+import 'package:excel/excel.dart' as excel_pkg;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/router/app_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/tpo_provider.dart';
 import '../../../student/domain/entities/drive.dart';
+import '../../../student/presentation/providers/student_drive_provider.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../../core/theme/theme_extensions.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -13,12 +19,13 @@ import '../../../../shared/presentation/widgets/skeleton_loader.dart';
 import '../../../../shared/presentation/widgets/state_block_widget.dart';
 import '../../../../shared/presentation/widgets/status_thread_widget.dart';
 import '../../../../shared/presentation/widgets/subtle_divider.dart';
-import '../../../../shared/presentation/widgets/app_logo.dart';
 import '../../../../shared/presentation/widgets/app_refresh_indicator.dart';
 import '../../../../shared/presentation/widgets/interactive_feedback.dart';
 import '../../../../core/theme/app_motion.dart';
 import '../widgets/drive_qr_code_modal.dart';
 import 'drive_creation_wizard.dart';
+import 'tpo_profile_screen.dart';
+import '../../../../shared/presentation/widgets/profile_avatar.dart';
 
 class TpoDashboardScreen extends ConsumerStatefulWidget {
   const TpoDashboardScreen({super.key});
@@ -28,6 +35,206 @@ class TpoDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
+  bool _isExportingStudents = false;
+
+  Future<void> _exportRegisteredStudentsExcel(BuildContext context) async {
+    if (_isExportingStudents) return;
+    setState(() => _isExportingStudents = true);
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Generating Registered Students Excel Report...',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    try {
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select('*')
+          .eq('role', 'student')
+          .order('department', ascending: true)
+          .order('usn', ascending: true);
+
+      final students = (response as List).cast<Map<String, dynamic>>();
+      if (students.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('No registered students found to export.')),
+        );
+        return;
+      }
+
+      final excel = excel_pkg.Excel.createExcel();
+      if (excel.sheets.containsKey('Sheet1')) {
+        excel.delete('Sheet1');
+      }
+
+      final sheet = excel['Registered Students'];
+      excel.setDefaultSheet('Registered Students');
+
+      // Title & Metadata
+      sheet.appendRow([
+        excel_pkg.TextCellValue('Malnad College of Engineering — Placement Cell'),
+      ]);
+      sheet.appendRow([
+        excel_pkg.TextCellValue('Official Registered Students Master Report'),
+      ]);
+      sheet.appendRow([
+        excel_pkg.TextCellValue('Total Registered Students: ${students.length}'),
+        excel_pkg.TextCellValue('Exported At: ${DateTime.now().toLocal().toString().split('.')[0]}'),
+      ]);
+      sheet.appendRow([]); // Empty spacer row
+
+      // Headers
+      final headers = <excel_pkg.CellValue>[
+        excel_pkg.TextCellValue('Sl No'),
+        excel_pkg.TextCellValue('USN / Roll No'),
+        excel_pkg.TextCellValue('Full Name'),
+        excel_pkg.TextCellValue('Email'),
+        excel_pkg.TextCellValue('Phone Number'),
+        excel_pkg.TextCellValue('Department'),
+        excel_pkg.TextCellValue('Course Code'),
+        excel_pkg.TextCellValue('Course Name'),
+        excel_pkg.TextCellValue('Semester'),
+        excel_pkg.TextCellValue('Section'),
+        excel_pkg.TextCellValue('Batch'),
+        excel_pkg.TextCellValue('Admission Year'),
+        excel_pkg.TextCellValue('Graduation Year'),
+        excel_pkg.TextCellValue('10th (SSLC) %'),
+        excel_pkg.TextCellValue('12th / Diploma %'),
+        excel_pkg.TextCellValue('CGPA'),
+        excel_pkg.TextCellValue('Active Backlogs'),
+        excel_pkg.TextCellValue('Verification Status'),
+        excel_pkg.TextCellValue('Consent Status'),
+        excel_pkg.TextCellValue('Profile Completed'),
+        excel_pkg.TextCellValue('Email Verified'),
+        excel_pkg.TextCellValue('Registration Date'),
+      ];
+      sheet.appendRow(headers);
+
+      int slNo = 1;
+      final deptStats = <String, Map<String, int>>{};
+
+      for (final s in students) {
+        final dept = (s['department'] as String?) ?? 'Unassigned';
+        final courseCode = (s['verified_course_code'] ?? s['detected_course_code'] ?? '') as String;
+        final courseName = (s['verified_course_name'] ?? s['detected_course_name'] ?? dept) as String;
+        final approvalStatus = (s['approval_status'] as String?)?.toUpperCase() ?? 'PENDING';
+        final consentStatus = (s['consent_status'] as String?)?.replaceAll('_', ' ').toUpperCase() ?? 'NOT SET';
+        final profileCompleted = (s['profile_completed'] as bool? ?? false) ? 'YES' : 'NO';
+        final emailVerified = (s['email_verified'] as bool? ?? false) ? 'YES' : 'NO';
+        final createdAt = s['created_at'] != null ? s['created_at'].toString().split('T').first : 'N/A';
+
+        deptStats.putIfAbsent(dept, () => {'total': 0, 'approved': 0, 'pending': 0, 'rejected': 0});
+        deptStats[dept]!['total'] = (deptStats[dept]!['total'] ?? 0) + 1;
+        if (approvalStatus == 'APPROVED') {
+          deptStats[dept]!['approved'] = (deptStats[dept]!['approved'] ?? 0) + 1;
+        } else if (approvalStatus == 'REJECTED') {
+          deptStats[dept]!['rejected'] = (deptStats[dept]!['rejected'] ?? 0) + 1;
+        } else {
+          deptStats[dept]!['pending'] = (deptStats[dept]!['pending'] ?? 0) + 1;
+        }
+
+        sheet.appendRow([
+          excel_pkg.IntCellValue(slNo++),
+          excel_pkg.TextCellValue((s['usn'] as String?) ?? 'N/A'),
+          excel_pkg.TextCellValue((s['name'] as String?) ?? 'N/A'),
+          excel_pkg.TextCellValue((s['email'] as String?) ?? 'N/A'),
+          excel_pkg.TextCellValue((s['phone'] as String?) ?? 'N/A'),
+          excel_pkg.TextCellValue(dept),
+          excel_pkg.TextCellValue(courseCode),
+          excel_pkg.TextCellValue(courseName),
+          s['semester'] != null ? excel_pkg.IntCellValue(s['semester'] as int) : excel_pkg.TextCellValue('N/A'),
+          excel_pkg.TextCellValue((s['section'] as String?) ?? 'N/A'),
+          excel_pkg.TextCellValue((s['batch'] as String?) ?? 'N/A'),
+          s['admission_year'] != null ? excel_pkg.IntCellValue(s['admission_year'] as int) : excel_pkg.TextCellValue('N/A'),
+          s['graduation_year'] != null ? excel_pkg.IntCellValue(s['graduation_year'] as int) : excel_pkg.TextCellValue('N/A'),
+          s['tenth_percent'] != null ? excel_pkg.DoubleCellValue((s['tenth_percent'] as num).toDouble()) : excel_pkg.TextCellValue('N/A'),
+          s['twelfth_or_diploma_percent'] != null ? excel_pkg.DoubleCellValue((s['twelfth_or_diploma_percent'] as num).toDouble()) : excel_pkg.TextCellValue('N/A'),
+          s['cgpa'] != null ? excel_pkg.DoubleCellValue((s['cgpa'] as num).toDouble()) : excel_pkg.TextCellValue('N/A'),
+          excel_pkg.IntCellValue(s['active_backlogs'] as int? ?? 0),
+          excel_pkg.TextCellValue(approvalStatus),
+          excel_pkg.TextCellValue(consentStatus),
+          excel_pkg.TextCellValue(profileCompleted),
+          excel_pkg.TextCellValue(emailVerified),
+          excel_pkg.TextCellValue(createdAt),
+        ]);
+      }
+
+      // Sheet 2: Department Summary Breakdown
+      final summarySheet = excel['Department Breakdown'];
+      summarySheet.appendRow([
+        excel_pkg.TextCellValue('Department Summary Breakdown'),
+      ]);
+      summarySheet.appendRow([]);
+      summarySheet.appendRow([
+        excel_pkg.TextCellValue('Department'),
+        excel_pkg.TextCellValue('Total Registered'),
+        excel_pkg.TextCellValue('Approved'),
+        excel_pkg.TextCellValue('Pending Verification'),
+        excel_pkg.TextCellValue('Rejected'),
+      ]);
+
+      for (final entry in deptStats.entries) {
+        summarySheet.appendRow([
+          excel_pkg.TextCellValue(entry.key),
+          excel_pkg.IntCellValue(entry.value['total'] ?? 0),
+          excel_pkg.IntCellValue(entry.value['approved'] ?? 0),
+          excel_pkg.IntCellValue(entry.value['pending'] ?? 0),
+          excel_pkg.IntCellValue(entry.value['rejected'] ?? 0),
+        ]);
+      }
+
+      final fileBytes = excel.save();
+      if (fileBytes != null) {
+        final directory = await getTemporaryDirectory();
+        final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
+        final filePath = '${directory.path}/MCE_Registered_Students_$timestamp.xlsx';
+        await File(filePath).writeAsBytes(fileBytes, flush: true);
+
+        final result = await Share.shareXFiles(
+          [XFile(filePath, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
+          text: 'MCE Placement Cell — Registered Students Excel Export ($timestamp)',
+          subject: 'Registered Students Excel Report',
+        );
+
+        if (result.status == ShareResultStatus.success) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('✅ Registered students Excel exported successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('❌ Error exporting Excel report: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isExportingStudents = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentNavIndex = ref.watch(tpoDashboardTabProvider);
@@ -55,6 +262,11 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
         icon: Icons.assignment_turned_in_outlined,
         selectedIcon: Icons.assignment_turned_in_rounded,
         label: 'Offers',
+      ),
+      const NavDestinationItem(
+        icon: Icons.person_outline_rounded,
+        selectedIcon: Icons.person_rounded,
+        label: 'Profile',
       ),
     ];
 
@@ -191,6 +403,8 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
         return _appointFacultyTab(ref, brandTheme, theme);
       case 3:
         return _offersAndRoundsTab(ref, brandTheme, theme);
+      case 4:
+        return TpoProfileScreen(profile: ref.watch(authNotifierProvider).valueOrNull);
       default:
         return _overviewTab(context, ref, name, brandTheme, theme);
     }
@@ -208,6 +422,7 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
           ref.refresh(tpoDrivesProvider.future),
           ref.refresh(tpoApplicantCountProvider.future),
           ref.refresh(tpoOffersCountProvider.future),
+          ref.refresh(tpoRegisteredStudentsCountProvider.future),
         ]);
       },
       child: SingleChildScrollView(
@@ -223,14 +438,15 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const AppLogo(size: 42, showGlow: true),
-              const SizedBox(width: AppSpacing.sp3),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     RichText(
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       text: TextSpan(
                         text: 'Welcome, ',
                         style: GoogleFonts.fraunces(
@@ -253,13 +469,17 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                     const SizedBox(height: 2),
                     Text(
                       '2026-27 Academic Cycle · Placement Cell',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(fontSize: 12, color: brandTheme.textMuted),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               IconButton(
-                icon: Icon(Icons.logout_rounded, size: 20, color: brandTheme.textMuted),
+                icon: Icon(Icons.logout_rounded, size: 22, color: brandTheme.textMuted),
+                tooltip: 'Sign Out',
                 onPressed: () async {
                   await ref.read(authNotifierProvider.notifier).signOut();
                   if (context.mounted) context.go('/login');
@@ -438,6 +658,90 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
               message: "Unable to refresh active statistics: ${err.toString()}",
             ),
           ),
+          const SizedBox(height: AppSpacing.sp4),
+
+          // Registered Students Master Excel Export Quick Action
+          ref.watch(tpoRegisteredStudentsCountProvider).when(
+            data: (registeredCount) => Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: ShapeDecoration(
+                color: theme.colorScheme.surface,
+                shape: ContinuousRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppShapes.radiusStandard),
+                  side: BorderSide(color: brandTheme.cardBorder),
+                ),
+                shadows: brandTheme.shadow1,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1D6F42).withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF1D6F42).withValues(alpha: 0.4)),
+                    ),
+                    child: const Icon(Icons.table_chart_rounded, color: Color(0xFF22C55E), size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$registeredCount Registered Students',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.fraunces(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Export master database (.xlsx)',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: brandTheme.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF1D6F42),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      minimumSize: const Size(0, 36),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: _isExportingStudents ? null : () => _exportRegisteredStudentsExcel(context),
+                    icon: _isExportingStudents
+                        ? const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.file_download_rounded, size: 14),
+                    label: Text(
+                      _isExportingStudents ? 'Exporting...' : 'Export',
+                      style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
           const SizedBox(height: AppSpacing.sp6),
 
           Text(
@@ -529,13 +833,14 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
               }
               return Column(
                 children: drives.map((drive) {
-                  final statusLower = drive.status.toLowerCase();
+                  final isDriveClosed = drive.isClosed;
+                  final statusLower = isDriveClosed ? 'completed' : (drive.isUpcoming ? 'upcoming' : 'active');
                   Color statusBg = brandTheme.brassSoft;
                   Color statusText = brandTheme.brassPrimary;
-                  if (statusLower == 'active' || statusLower == 'ongoing') {
+                  if (statusLower == 'active') {
                     statusBg = Colors.greenAccent.withValues(alpha: 0.15);
                     statusText = Colors.greenAccent;
-                  } else if (statusLower == 'completed' || statusLower == 'closed') {
+                  } else if (statusLower == 'completed' || isDriveClosed) {
                     statusBg = Colors.blueAccent.withValues(alpha: 0.15);
                     statusText = Colors.blueAccent;
                   }
@@ -588,7 +893,7 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                                       border: Border.all(color: statusText.withValues(alpha: 0.4)),
                                     ),
                                     child: Text(
-                                      drive.status.toUpperCase(),
+                                      isDriveClosed ? 'CLOSED' : (drive.isUpcoming ? 'UPCOMING' : 'ACTIVE'),
                                       style: GoogleFonts.inter(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 10,
@@ -849,10 +1154,12 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                       children: [
                         Row(
                           children: [
-                            CircleAvatar(
-                              radius: 20,
-                              backgroundColor: brandTheme.brassSoft,
-                              child: Icon(Icons.person_rounded, color: brandTheme.brassPrimary, size: 22),
+                            ProfileAvatar(
+                              imageUrl: (profile['photo_url'] ?? profile['avatar_url']) as String?,
+                              name: name,
+                              size: ProfileAvatarSize.medium,
+                              showBorder: true,
+                              borderColor: brandTheme.brassPrimary.withValues(alpha: 0.3),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -974,14 +1281,15 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
   }
 
   Widget _roundControlCard(Drive drive, AppBrandTheme brandTheme, ThemeData theme) {
-    final statusLower = drive.status.toLowerCase();
+    final isDriveClosed = drive.isClosed;
+    final statusLower = isDriveClosed ? 'completed' : (drive.isUpcoming ? 'upcoming' : 'active');
     Color statusBg = brandTheme.brassSoft;
     Color statusText = brandTheme.brassPrimary;
 
-    if (statusLower == 'active' || statusLower == 'ongoing') {
+    if (statusLower == 'active') {
       statusBg = Colors.greenAccent.withValues(alpha: 0.15);
       statusText = Colors.greenAccent;
-    } else if (statusLower == 'completed' || statusLower == 'closed') {
+    } else if (statusLower == 'completed' || isDriveClosed) {
       statusBg = Colors.blueAccent.withValues(alpha: 0.15);
       statusText = Colors.blueAccent;
     }
@@ -1029,16 +1337,14 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
-                    value: ['upcoming', 'active', 'completed', 'ongoing', 'closed'].contains(statusLower)
-                        ? (statusLower == 'ongoing' ? 'active' : (statusLower == 'closed' ? 'completed' : statusLower))
-                        : 'upcoming',
+                    value: statusLower,
                     dropdownColor: theme.colorScheme.surface,
                     icon: Icon(Icons.arrow_drop_down_rounded, color: statusText, size: 20),
                     style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 11, color: statusText),
                     items: const [
                       DropdownMenuItem(value: 'upcoming', child: Text('UPCOMING')),
                       DropdownMenuItem(value: 'active', child: Text('ACTIVE')),
-                      DropdownMenuItem(value: 'completed', child: Text('COMPLETED')),
+                      DropdownMenuItem(value: 'completed', child: Text('CLOSED')),
                     ],
                     onChanged: (newStatus) async {
                       if (newStatus == null) return;
@@ -1047,7 +1353,7 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                       ref.invalidate(tpoDrivesProvider);
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Updated ${drive.companyName} status to ${newStatus.toUpperCase()}')),
+                          SnackBar(content: Text('Updated ${drive.companyName} status to ${newStatus == 'completed' ? 'CLOSED' : newStatus.toUpperCase()}')),
                         );
                       }
                     },
@@ -1208,8 +1514,172 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
               ],
             ),
           ],
+
+          const SizedBox(height: 16),
+          const SubtleDivider(height: 1),
+          const SizedBox(height: 16),
+
+          // Delete Placement Drive Action (TPO / Admin Only)
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _showDeleteDriveConfirmationDialog(context, drive, brandTheme, theme),
+              icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
+              label: Text(
+                'Delete Placement Drive',
+                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.redAccent),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.5)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  void _showDeleteDriveConfirmationDialog(BuildContext context, Drive drive, AppBrandTheme brandTheme, ThemeData theme) {
+    bool isDeleting = false;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dlgContext) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: theme.colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: brandTheme.cardBorder),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Delete Placement Drive?',
+                      style: GoogleFonts.fraunces(fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Are you sure you want to delete this placement drive?',
+                    style: GoogleFonts.inter(fontSize: 13, color: theme.colorScheme.onSurface),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: brandTheme.surfaceAlt,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: brandTheme.cardBorder),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          drive.companyName,
+                          style: GoogleFonts.fraunces(fontWeight: FontWeight.bold, fontSize: 15, color: theme.colorScheme.onSurface),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          drive.roleTitle,
+                          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: brandTheme.brassPrimary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'This action will remove the drive from Placement Connect and students will no longer be able to view or apply to it.\n\nThis action cannot be undone.',
+                    style: GoogleFonts.inter(fontSize: 12, color: brandTheme.textMuted, height: 1.4),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isDeleting ? null : () => Navigator.pop(dlgContext),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: brandTheme.textMuted),
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: isDeleting
+                      ? null
+                      : () async {
+                          setDialogState(() => isDeleting = true);
+                          try {
+                            final repo = ref.read(tpoRepositoryProvider);
+                            await repo.deleteDrive(drive.id);
+                            ref.invalidate(tpoDrivesProvider);
+                            ref.invalidate(studentEligibleDrivesProvider);
+
+                            if (dlgContext.mounted) {
+                              Navigator.pop(dlgContext);
+                            }
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('✓ Placement drive deleted successfully.'),
+                                  backgroundColor: Colors.green,
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() => isDeleting = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Unable to delete the placement drive. Please try again.'),
+                                  backgroundColor: Colors.redAccent,
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  icon: isDeleting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.delete_forever_rounded, size: 18, color: Colors.white),
+                  label: Text(
+                    isDeleting ? 'Deleting...' : 'Delete Drive',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1692,13 +2162,10 @@ class _TpoDashboardScreenState extends ConsumerState<TpoDashboardScreen> {
                                       ),
                                       child: Row(
                                         children: [
-                                          CircleAvatar(
-                                            radius: 18,
-                                            backgroundColor: brandTheme.brassSoft,
-                                            child: Text(
-                                              name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
-                                              style: GoogleFonts.fraunces(fontSize: 14, fontWeight: FontWeight.w600, color: brandTheme.brassPrimary),
-                                            ),
+                                          ProfileAvatar(
+                                            imageUrl: (student['photo_url'] ?? student['avatar_url']) as String?,
+                                            name: name,
+                                            size: ProfileAvatarSize.small,
                                           ),
                                           const SizedBox(width: 12),
                                           Expanded(

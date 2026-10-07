@@ -16,6 +16,23 @@ final tpoRepositoryProvider = Provider<TpoRepository>((ref) {
 
 final tpoDrivesProvider = FutureProvider<List<Drive>>((ref) async {
   final repo = ref.watch(tpoRepositoryProvider);
+
+  final channel = Supabase.instance.client
+      .channel('tpo_drives_realtime_${DateTime.now().millisecondsSinceEpoch}')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'drives',
+        callback: (payload) {
+          ref.invalidateSelf();
+        },
+      )
+      .subscribe();
+
+  ref.onDispose(() {
+    Supabase.instance.client.removeChannel(channel);
+  });
+
   return repo.getDrives();
 });
 
@@ -53,6 +70,19 @@ final tpoOffersCountProvider = FutureProvider<int>((ref) async {
         .from('applications')
         .select('id')
         .eq('status', 'selected');
+    return (response as List).length;
+  } catch (_) {
+    return 0;
+  }
+});
+
+/// Total registered students count in the institution.
+final tpoRegisteredStudentsCountProvider = FutureProvider<int>((ref) async {
+  try {
+    final response = await Supabase.instance.client
+        .from('profiles')
+        .select('id')
+        .eq('role', 'student');
     return (response as List).length;
   } catch (_) {
     return 0;
@@ -120,7 +150,7 @@ final tpoDriveApplicantsProvider = FutureProvider.family<List<Map<String, dynami
 
   final response = await Supabase.instance.client
       .from('applications')
-      .select('id, status, applied_at, student_id, student:profiles!applications_student_id_fkey(name, email, usn, department, cgpa, semester)')
+      .select('id, status, applied_at, student_id, student:profiles!applications_student_id_fkey(name, email, usn, department, cgpa, semester, photo_url)')
       .eq('drive_id', driveId)
       .order('applied_at', ascending: false);
 

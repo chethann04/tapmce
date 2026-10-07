@@ -12,21 +12,9 @@ const json = (payload: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-// ── Built-in fallback Firebase Service Account ──────────────────────────────
-const FALLBACK_SERVICE_ACCOUNT = {
-  "type": "service_account",
-  "project_id": "tapmce-30c3f",
-  "private_key_id": "cab33551c7608dd5059e6c2401361e2b2865ef7d",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC4wG3EeVPUOiDi\n+Lfm0hj2rpYQEe8S8WOQJgoXf5nH2dT0/KoBGxvMa5oz4SP32KZBrYJ6E30Kh7Sk\nKxL19+frcvzKD4uS62hQ8bR3tKwl0sNqTkx3x3UGbkrYlK4LazYnbGRxIFS0b//K\n9kk06TLBW+Rag5iuqivWJPbZn6yNaBMG2vdB7AwMSoC7tD445JgwDfp+pET9yoM7\ntfXUZ3C0OKSNpUHs6vFVdhUh9r2lwck3CrsXkFYrilgp5ogyhnWducyhj35gTQja\nSq9DqxSn6unO377ubG+uj5ge6AzsEj3vQOZxf//b2/t7Q0ch8i0OqejWphPkklhC\n07KOAydvAgMBAAECggEAUtLRYrcRgZ7dh2MA7pVZY5044NNpXhChFco30/j8M7/P\n3FQ40m4YtDe41XEk8sNJJUBnsdpyv/m+XaqBwYr1iXPvJ5Z4d9DY3xC8Wr3APuSR\nfmLDnR7ps4xWOWnN7IiPqnTJQn2/+3QKNC7c+r9gZZaQdJNyKztWk5XWpBEVBf7S\n3X9c54jitmYz30Oqn5JVuHyKdECDnYAwnuBkiViG1dMs60+YDjZfl1BjCv2Yc5rP\nmJApaWG8LoAjteSQcEPWB+gFjPoUjydFaMlpmfF/IYYcu2JaVLUMnVExX/3sG1cI\nlLbPQea+YlGCJoKI+zyWcV703jfIG8MI/TGhjYUFgQKBgQDl7tXQI+0bznvkWJ8c\n1EQXL5FJfMFd5plZA6lBx3DcfYjYxNet0SXkGnWDJuA1YnG3scxtl7ic/jja41Uw\nkIFPpJQmNug2EvyWXLKXxDcKYvaKd+MrNp9DA78SPBy+ofFYFmZURP/irP3sPwgX\nwR6XIAU4zGqZtsUfHZ9IV6+OUQKBgQDNslUn5MAlv31P+Z6TpmMvYounIwqITlUL\nsf5iMvqwqyZp9qGQXQeJZjiPO5i3Kl0uLPYRm30x34WuTAmRK0V32MAJ/BnVPUh1\n+bfbhTZFJUvwoa+a8Ny+F0NpeEmdU52+iMzfrqBiz7fJP77U6ucopiKy7C7OHEcZ\nkOEyAC0pvwKBgQCb4jsE3IZwtqFZ4xckRWhQS8h1COZTkfXe2lOSq/MBGP6A75rF\nVakZpzKKEv4oUzCDeD//AMCBdvz2sO7deOqiIxLpgYoWtvKVwgy2RamHGibJI5RY\nhLSei1irtSNLvqDPtofzk7/jXqLb2rPS3vOtQ2Em67dNtRKZEM0fD4uOsQKBgCol\nQ/VslUImvhJI3wj5qpDm7B5Ou7W59wryaWDNeTgBmVlUwz3FEepBG42ddGjzMSxo\n4fIxnbE+TzGrOrqX1x/7NT3WfaSHbfVeOSGtZbU9MxYWythASbpZIeLWVp75pvSH\nKxMZwJr+XHXLrdoKV1qoz6tBYUWx3Y+Lc9i+2IIZAoGAODjWdG+DP/ee4ZufUH88\nAGpTypkorxHzPGuTwV5nxtz8pPSe+x4hyfqkb6X0HsVhR80gG+n1/XqYp8GgxeIx\nYQB1ghjxXa6DsvsohePw3sydnZ+bfJLbPf8xlzu0LUvrLrVaLETTGBthwTa/Sxub\nRHBkIoMkSGrh9FhEpFEd+uo=\n-----END PRIVATE KEY-----\n",
-  "client_email": "firebase-adminsdk-fbsvc@tapmce-30c3f.iam.gserviceaccount.com",
-  "client_id": "113836110563762827913",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40tapmce-30c3f.iam.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
-}
-  ;
+// ── Firebase Service Account Configuration ──────────────────────────────────
+// Configure FCM_SERVICE_ACCOUNT in Supabase Dashboard > Project Settings / Edge Functions
+// with your Firebase service account JSON.
 
 // ── FCM HTTP v1 (OAuth2 + Service Account) helpers ──────────────────────────
 
@@ -45,8 +33,9 @@ function base64UrlToBytes(input: string): Uint8Array {
   return bytes;
 }
 
-function parseServiceAccount(raw: string): Record<string, string> {
+function parseServiceAccount(raw: string): Record<string, string> | null {
   const trimmed = raw.trim();
+  if (!trimmed) return null;
 
   // 1. Standard JSON
   try {
@@ -80,9 +69,8 @@ function parseServiceAccount(raw: string): Record<string, string> {
     if (parsed.private_key) return parsed;
   } catch (_) { }
 
-  // Fallback to built-in service account
-  console.warn("[send-fcm-push] Could not parse environment FCM_SERVICE_ACCOUNT. Falling back to built-in service account.");
-  return FALLBACK_SERVICE_ACCOUNT;
+  console.warn("[send-fcm-push] Could not parse environment FCM_SERVICE_ACCOUNT.");
+  return null;
 }
 
 async function createAssertion(serviceAccount: Record<string, string>): Promise<string> {
@@ -215,14 +203,22 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const serviceAccountRaw = Deno.env.get("FCM_SERVICE_ACCOUNT") ?? "";
+    const serviceAccountRaw =
+      Deno.env.get("FCM_SERVICE_ACCOUNT") ??
+      Deno.env.get("FIREBASE_SERVICE_ACCOUNT") ??
+      Deno.env.get("GOOGLE_APPLICATION_CREDENTIALS") ??
+      "";
 
-    // Parse service account or fall back safely to built-in tapacc-e12f4
-    let serviceAccount: Record<string, string>;
-    if (serviceAccountRaw && serviceAccountRaw.length > 10) {
-      serviceAccount = parseServiceAccount(serviceAccountRaw);
-    } else {
-      serviceAccount = FALLBACK_SERVICE_ACCOUNT;
+    const serviceAccount = parseServiceAccount(serviceAccountRaw);
+    if (!serviceAccount || !serviceAccount.private_key) {
+      console.error("[send-fcm-push] Missing or invalid FCM_SERVICE_ACCOUNT secret.");
+      return json(
+        {
+          error:
+            "FCM_SERVICE_ACCOUNT secret is not configured in Supabase Edge Functions. Please add your Firebase Service Account JSON to Supabase Edge Function Secrets.",
+        },
+        500,
+      );
     }
 
     const projectId = serviceAccount.project_id || "tapacc-e12f4";
@@ -333,7 +329,14 @@ serve(async (req) => {
       } catch (e) {
         const errMsg = (e as Error).message;
         console.error(`[send-fcm-push] Delivery failed for token:`, errMsg);
-        if (errMsg.includes("NotRegistered") || errMsg.includes("UNREGISTERED")) {
+        if (
+          errMsg.includes("NotRegistered") ||
+          errMsg.includes("UNREGISTERED") ||
+          errMsg.includes("SenderId mismatch") ||
+          errMsg.includes("SENDER_ID_MISMATCH") ||
+          errMsg.includes("InvalidArgument") ||
+          errMsg.includes("INVALID_ARGUMENT")
+        ) {
           try {
             await supabase.from("fcm_tokens").delete().eq("fcm_token", t.token);
             await supabase.from("fcm_tokens").delete().eq("token", t.token);

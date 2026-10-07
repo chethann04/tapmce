@@ -50,15 +50,8 @@ final pendingStudentsProvider = FutureProvider<List<UserProfile>>((ref) async {
   final department = await _resolveFacultyDepartment(ref);
   final repo = ref.watch(facultyRepositoryProvider);
 
-  // If department is still empty, fetch ALL pending students across departments
   if (department.isEmpty) {
-    final response = await Supabase.instance.client
-        .from('profiles')
-        .select('*')
-        .eq('role', 'student')
-        .eq('approval_status', 'pending')
-        .order('created_at', ascending: false);
-    return (response as List).map((map) => UserProfile.fromMap(map)).toList();
+    return [];
   }
 
   return repo.getPendingStudents(department: department);
@@ -69,13 +62,7 @@ final verifiedStudentsProvider = FutureProvider<List<UserProfile>>((ref) async {
   final repo = ref.watch(facultyRepositoryProvider);
 
   if (department.isEmpty) {
-    final response = await Supabase.instance.client
-        .from('profiles')
-        .select('*')
-        .eq('role', 'student')
-        .eq('approval_status', 'approved')
-        .order('name', ascending: true);
-    return (response as List).map((map) => UserProfile.fromMap(map)).toList();
+    return [];
   }
 
   return repo.getVerifiedStudents(department: department);
@@ -86,13 +73,7 @@ final rejectedStudentsProvider = FutureProvider<List<UserProfile>>((ref) async {
   final repo = ref.watch(facultyRepositoryProvider);
 
   if (department.isEmpty) {
-    final response = await Supabase.instance.client
-        .from('profiles')
-        .select('*')
-        .eq('role', 'student')
-        .eq('approval_status', 'rejected')
-        .order('name', ascending: true);
-    return (response as List).map((map) => UserProfile.fromMap(map)).toList();
+    return [];
   }
 
   return repo.getRejectedStudents(department: department);

@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "954847069498",
-    "project_id": "tapmce-30c3f",
-    "storage_bucket": "tapmce-30c3f.firebasestorage.app"
+    "project_number": "896321163453",
+    "project_id": "tapacc-e12f4",
+    "storage_bucket": "tapacc-e12f4.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:954847069498:android:af4cf1bfe17c5b9f8abc03",
+        "mobilesdk_app_id": "1:896321163453:android:22956673d80ded92e6e7d4",
         "android_client_info": {
           "package_name": "com.placementconnect.placement_connect"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCSxs1bL5JCq6JKMIr84qUb7hmjRMIhf00"
+          "current_key": "AIzaSyBaZ-a8Sj2jWbxvEvElDawj-KD91dUCnSo"
         }
       ],
       "services": {

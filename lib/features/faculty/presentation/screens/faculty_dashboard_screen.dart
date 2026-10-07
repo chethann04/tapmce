@@ -12,12 +12,13 @@ import '../../../../shared/presentation/widgets/skeleton_loader.dart';
 import '../../../../shared/presentation/widgets/state_block_widget.dart';
 import '../../../../shared/presentation/widgets/status_thread_widget.dart';
 import '../../../../shared/presentation/widgets/subtle_divider.dart';
-import '../../../../shared/presentation/widgets/app_logo.dart';
 import '../../../../shared/presentation/widgets/app_refresh_indicator.dart';
 import '../../../student/domain/entities/drive.dart';
 import '../../../tpo/presentation/providers/tpo_provider.dart';
 import 'student_approval_queue_screen.dart';
 import 'department_analytics_screen.dart';
+import '../../../../shared/presentation/widgets/profile_avatar.dart';
+import '../../../../core/services/profile_service.dart';
 
 class FacultyDashboardScreen extends ConsumerStatefulWidget {
   const FacultyDashboardScreen({super.key});
@@ -27,6 +28,62 @@ class FacultyDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _FacultyDashboardScreenState extends ConsumerState<FacultyDashboardScreen> {
+  bool _isUploadingPhoto = false;
+
+  Future<void> _changeProfilePhoto(BuildContext context, String userId) async {
+    if (_isUploadingPhoto) return;
+    final profileService = ref.read(profileServiceProvider);
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final bytes = await profileService.pickAndCropImage(context);
+      if (bytes == null) return;
+
+      setState(() => _isUploadingPhoto = true);
+
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              ),
+              SizedBox(width: 12),
+              Text('Uploading profile photo...'),
+            ],
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      await profileService.uploadAndUpdateAvatar(
+        userId: userId,
+        imageBytes: bytes,
+      );
+
+      if (mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('✅ Profile photo updated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('❌ Error updating profile photo: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingPhoto = false);
+    }
+  }
   @override
   Widget build(BuildContext context) {
     final currentNavIndex = ref.watch(facultyDashboardTabProvider);
@@ -147,14 +204,15 @@ class _FacultyDashboardScreenState extends ConsumerState<FacultyDashboardScreen>
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const AppLogo(size: 42, showGlow: true),
-              const SizedBox(width: AppSpacing.sp3),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     RichText(
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       text: TextSpan(
                         text: 'Welcome, ',
                         style: GoogleFonts.fraunces(
@@ -177,13 +235,17 @@ class _FacultyDashboardScreenState extends ConsumerState<FacultyDashboardScreen>
                     const SizedBox(height: 2),
                     Text(
                       'Department Faculty Advisor',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(fontSize: 12, color: brandTheme.textMuted),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               IconButton(
-                icon: Icon(Icons.logout_rounded, size: 20, color: brandTheme.textMuted),
+                icon: Icon(Icons.logout_rounded, size: 22, color: brandTheme.textMuted),
+                tooltip: 'Sign Out',
                 onPressed: () async {
                   await ref.read(authNotifierProvider.notifier).signOut();
                   if (context.mounted) context.go('/login');
@@ -471,26 +533,56 @@ class _FacultyDashboardScreenState extends ConsumerState<FacultyDashboardScreen>
             ),
             child: Column(
               children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    gradient: brandTheme.brassGradient,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: brandTheme.brassPrimary.withValues(alpha: 0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Text(
-                      name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'F',
-                      style: GoogleFonts.fraunces(fontSize: 36, color: brandTheme.onBrass, fontWeight: FontWeight.w700),
+                Stack(
+                  children: [
+                    ProfileAvatar(
+                      imageUrl: user?.photoUrl,
+                      name: name,
+                      size: ProfileAvatarSize.hero,
+                      showBorder: true,
+                      borderColor: brandTheme.brassPrimary,
+                      borderWidth: 3,
+                      semanticsLabel: '$name profile picture',
                     ),
-                  ),
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: user != null
+                              ? () => _changeProfilePhoto(context, user.id)
+                              : null,
+                          customBorder: const CircleBorder(),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              gradient: brandTheme.brassGradient,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.25),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: _isUploadingPhoto
+                                ? SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: brandTheme.onBrass,
+                                    ),
+                                  )
+                                : Icon(Icons.camera_alt_rounded,
+                                    size: 16, color: brandTheme.onBrass),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: AppSpacing.sp4),
                 Text(name, style: GoogleFonts.fraunces(fontSize: 22, fontWeight: FontWeight.bold)),

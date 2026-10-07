@@ -69,7 +69,7 @@ class StudentProfileRemoteDatasource {
       'phone': data.phone,
       'dob': data.dob?.toIso8601String().split('T').first,
       'gender': data.gender,
-      'photo_url': photoUrl,
+      if (photoUrl != null && photoUrl.isNotEmpty) 'photo_url': photoUrl,
       'semester': data.semester,
       'section': data.section,
       'admission_year': data.admissionYear,
@@ -78,12 +78,10 @@ class StudentProfileRemoteDatasource {
       'twelfth_or_diploma_percent': data.pucOrDiplomaPercent,
       'cgpa': data.cgpa,
       'active_backlogs': data.activeBacklogs,
-      'resume_url': resumeUrl,
+      if (resumeUrl != null && resumeUrl.isNotEmpty) 'resume_url': resumeUrl,
+      'linkedin_url': data.linkedinUrl,
+      'github_url': data.githubUrl,
       'profile_completed': true,
-      'email_verified': true,
-      'id': userId,
-        'email': Supabase.instance.client.auth.currentUser?.email,
-      'role': 'student',
       'updated_at': DateTime.now().toIso8601String(),
     };
 
@@ -101,7 +99,88 @@ class StudentProfileRemoteDatasource {
       updateMap['detected_course_name'] = data.detectedCourseName;
     }
 
-    await _client.from('profiles').upsert(updateMap);
+    // Save linkedin_url and github_url into Supabase Auth user_metadata so links
+    // persist reliably even before migration 00043 is executed on the database.
+    if (_client.auth.currentUser?.id == userId) {
+      try {
+        await _client.auth.updateUser(
+          UserAttributes(
+            data: {
+              'linkedin_url': data.linkedinUrl ?? '',
+              'github_url': data.githubUrl ?? '',
+            },
+          ),
+        );
+      } catch (authError) {
+        // Non-blocking fallback; continue with database update
+      }
+    }
+
+    try {
+      // Deterministically UPDATE the existing profile by user ID (UUID)
+      final existingRows = await _client
+          .from('profiles')
+          .update(updateMap)
+          .eq('id', userId)
+          .select('id');
+
+      if ((existingRows as List).isEmpty) {
+        // Fallback: only insert if row does not exist yet
+        final currentUser = _client.auth.currentUser;
+        final email = currentUser?.id == userId ? currentUser?.email : null;
+        try {
+          await _client.from('profiles').insert({
+            'id': userId,
+            if (email != null) 'email': email,
+            'role': 'student',
+            'approval_status': 'pending',
+            'email_verified': true,
+            ...updateMap,
+          });
+        } on PostgrestException catch (insertErr) {
+          if (insertErr.code == '42703' ||
+              insertErr.message.contains('linkedin_url') ||
+              insertErr.message.contains('github_url')) {
+            final legacyInsert = Map<String, dynamic>.from(updateMap)
+              ..remove('linkedin_url')
+              ..remove('github_url');
+            await _client.from('profiles').insert({
+              'id': userId,
+              if (email != null) 'email': email,
+              'role': 'student',
+              'approval_status': 'pending',
+              'email_verified': true,
+              ...legacyInsert,
+            });
+          } else {
+            rethrow;
+          }
+        }
+      }
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') {
+        if (e.message.contains('profiles_email_key')) {
+          throw Exception('This email is already associated with another account.');
+        } else if (e.message.contains('usn') || e.message.contains('profiles_usn_key')) {
+          throw Exception('This USN is already registered with another account.');
+        }
+        throw Exception('Duplicate information detected. Please check your details.');
+      }
+      // If error is due to missing linkedin_url / github_url column, retry without them
+      if (e.code == '42703' || e.message.contains('linkedin_url') || e.message.contains('github_url')) {
+        final legacyMap = Map<String, dynamic>.from(updateMap)
+          ..remove('linkedin_url')
+          ..remove('github_url');
+        await _client.from('profiles').update(legacyMap).eq('id', userId);
+      } else {
+        throw Exception('Unable to update profile: ${e.message}');
+      }
+    } catch (e) {
+      if (e.toString().contains('23505') || e.toString().contains('profiles_email_key')) {
+        throw Exception('This email is already associated with another account.');
+      }
+      rethrow;
+    }
 
     // Notify Faculty Coordinator of this department for review
     try {
@@ -111,7 +190,7 @@ class StudentProfileRemoteDatasource {
             .from('profiles')
             .select('id')
             .eq('department', deptName)
-            .filter('role', 'in', ['faculty', 'coordinator']);
+            .filter('role', 'in', ['faculty', 'coordinator', 'faculty_coordinator']);
         final coordIds = (coordinators as List)
             .map((c) => c['id'] as String?)
             .where((id) => id != null && id.isNotEmpty)
@@ -123,9 +202,9 @@ class StudentProfileRemoteDatasource {
           final usnStr = data.usn != null && data.usn!.isNotEmpty ? ' (${data.usn})' : '';
           for (final cId in coordIds) {
             await _client.from('notifications').insert({
-              'user_id': cId,
+              'recipient_id': cId,
               'title': '📋 New Student Verification Request',
-              'body': '$studentName$usnStr submitted profile details for $deptName review.',
+              'message': '$studentName$usnStr submitted profile details for $deptName review.',
               'type': 'verification_request',
             });
           }

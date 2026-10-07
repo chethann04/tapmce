@@ -41,21 +41,20 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCqbf9kkYI4xg1rtH8bNOGs33ZmSUbVkKY',
-    appId: '1:816480739666:web:0f34561ebe6990e4cb1a8b',
-    messagingSenderId: '816480739666',
-    projectId: 'placement-connect-61be0',
-    authDomain: 'placement-connect-61be0.firebaseapp.com',
-    storageBucket: 'placement-connect-61be0.firebasestorage.app',
-    measurementId: 'G-08B0G6HRP4',
+    apiKey: 'AIzaSyDB_cYIaH44IhQFX_P0BS7WpudybWcHAy0',
+    appId: '1:896321163453:web:2d277bd693dd8a3de6e7d4',
+    messagingSenderId: '896321163453',
+    projectId: 'tapacc-e12f4',
+    authDomain: 'tapacc-e12f4.firebaseapp.com',
+    storageBucket: 'tapacc-e12f4.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCSxs1bL5JCq6JKMIr84qUb7hmjRMIhf00',
-    appId: '1:954847069498:android:af4cf1bfe17c5b9f8abc03',
-    messagingSenderId: '954847069498',
-    projectId: 'tapmce-30c3f',
-    storageBucket: 'tapmce-30c3f.firebasestorage.app',
+    apiKey: 'AIzaSyBaZ-a8Sj2jWbxvEvElDawj-KD91dUCnSo',
+    appId: '1:896321163453:android:22956673d80ded92e6e7d4',
+    messagingSenderId: '896321163453',
+    projectId: 'tapacc-e12f4',
+    storageBucket: 'tapacc-e12f4.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
