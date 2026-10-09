@@ -167,6 +167,9 @@ class PushNotificationService {
       if (user != null && token != null) {
         final success = await registerDeviceToken();
         regResult = success ? 'SUCCESS' : 'FAILURE';
+        listenToRealtimeNotifications(user.id);
+      } else if (user != null) {
+        listenToRealtimeNotifications(user.id);
       }
 
       debugPrint('==================================================');

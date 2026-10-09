@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:excel/excel.dart' as excel_pkg;
 import 'package:share_plus/share_plus.dart';
@@ -32,6 +33,10 @@ class _RoundManagementScreenState
   String _searchQuery = '';
   String _filterStatus = 'all'; // 'all', 'current', 'completed', 'offered', 'rejected', 'absent'
   final Set<String> _selectedAppIds = {};
+  final Set<String> _promotingAppIds = {};
+  final Set<String> _promotedFromRounds = {};
+  // ignore: unused_field
+  final Set<String> _promotedAppIds = {};
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -598,6 +603,9 @@ class _RoundManagementScreenState
     final status = app['status'] as String? ?? 'applied';
     final roundResult = app['round_result'] as String? ?? 'pending'; // per-stage result
     final appCurrentRound = app['current_round'] as int? ?? 1;
+    final isPromoting = _promotingAppIds.contains(appId);
+    final isPromoted = _promotedFromRounds.contains('${appId}_${activeRound.roundNumber}') ||
+        (roundResult == 'cleared' || appCurrentRound > activeRound.roundNumber);
 
     // Status badge — reflect the per-stage outcome, not the global app status
     Color statusColor;
@@ -608,7 +616,7 @@ class _RoundManagementScreenState
       statusColor = Colors.green.shade400;
       statusLabel = 'Offered 🏆';
       statusIcon = Icons.emoji_events_rounded;
-    } else if (roundResult == 'cleared' || appCurrentRound > activeRound.roundNumber) {
+    } else if (isPromoted) {
       statusColor = brandTheme.brassPrimary;
       statusLabel = 'Cleared ✓';
       statusIcon = Icons.check_circle_rounded;
@@ -773,7 +781,52 @@ class _RoundManagementScreenState
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (status != 'rejected' && status != 'selected' && status != 'offered') ...[
-                      if (appCurrentRound >= rounds.length)
+                      if (isPromoting)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(brandTheme.brassPrimary),
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                'Promoting...',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: brandTheme.brassPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (isPromoted)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle_rounded, size: 14, color: Colors.green.shade400),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Promoted',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green.shade400,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (appCurrentRound >= rounds.length)
                         TextButton.icon(
                           onPressed: () => _offerSelected([appId]),
                           icon: const Icon(Icons.emoji_events_rounded, size: 14),
@@ -790,9 +843,7 @@ class _RoundManagementScreenState
                           onPressed: () => _moveToNextRound([appId], fromRound: appCurrentRound),
                           icon: const Icon(Icons.arrow_forward_rounded, size: 14),
                           label: Text(
-                            appCurrentRound > activeRound.roundNumber
-                                ? 'Promote (S${appCurrentRound + 1})'
-                                : 'Promote',
+                            'Promote',
                             style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold),
                           ),
                           style: TextButton.styleFrom(
@@ -803,10 +854,13 @@ class _RoundManagementScreenState
                           ),
                         ),
                     ],
-                    SizedBox(
-                      width: 24,
-                      height: 28,
-                      child: PopupMenuButton<String>(
+                    if (isPromoting || isPromoted)
+                      const SizedBox(width: 12)
+                    else
+                      SizedBox(
+                        width: 24,
+                        height: 28,
+                        child: PopupMenuButton<String>(
                         padding: EdgeInsets.zero,
                         icon: Icon(Icons.more_vert_rounded, size: 18, color: brandTheme.textMuted),
                         onSelected: (act) => _handleAction(act, app),
@@ -1299,23 +1353,52 @@ class _RoundManagementScreenState
                 if (status != 'rejected' && status != 'selected' && status != 'offered') ...[
                   if (appCurrentRound < rounds.length)
                     Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _moveToNextRound([appId], fromRound: appCurrentRound);
-                        },
-                        icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-                        label: Text('Promote to Round ${appCurrentRound + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        style: FilledButton.styleFrom(backgroundColor: brandTheme.brassPrimary, foregroundColor: brandTheme.onBrass),
-                      ),
+                      child: _promotingAppIds.contains(appId)
+                          ? FilledButton.icon(
+                              onPressed: null,
+                              icon: SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(brandTheme.onBrass),
+                                ),
+                              ),
+                              label: const Text('Promoting...'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: brandTheme.brassPrimary,
+                                foregroundColor: brandTheme.onBrass,
+                              ),
+                            )
+                          : _promotedFromRounds.contains('${appId}_$appCurrentRound')
+                              ? FilledButton.icon(
+                                  onPressed: null,
+                                  icon: const Icon(Icons.check_circle_rounded, size: 16),
+                                  label: const Text('Promoted'),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: Colors.green.shade700,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                )
+                              : FilledButton.icon(
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    _moveToNextRound([appId], fromRound: appCurrentRound);
+                                  },
+                                  icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                                  label: Text('Promote to Round ${appCurrentRound + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  style: FilledButton.styleFrom(backgroundColor: brandTheme.brassPrimary, foregroundColor: brandTheme.onBrass),
+                                ),
                     )
                   else
                     Expanded(
                       child: FilledButton.icon(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _offerSelected([appId]);
-                        },
+                        onPressed: _promotingAppIds.contains(appId) || _promotedFromRounds.contains('${appId}_offer')
+                            ? null
+                            : () {
+                                Navigator.pop(ctx);
+                                _offerSelected([appId]);
+                              },
                         icon: const Icon(Icons.emoji_events_rounded, size: 16),
                         label: const Text('Offer Selection', style: TextStyle(fontWeight: FontWeight.bold)),
                         style: FilledButton.styleFrom(backgroundColor: Colors.green.shade600),
@@ -1351,6 +1434,7 @@ class _RoundManagementScreenState
     ThemeData theme,
     AppBrandTheme brandTheme,
   ) {
+    final isAnyBulkProcessing = _selectedAppIds.any((id) => _promotingAppIds.contains(id));
     return Positioned(
       left: 16,
       right: 16,
@@ -1390,45 +1474,71 @@ class _RoundManagementScreenState
                   children: [
                     if (!isLastRound)
                       InkWell(
-                        onTap: _bulkMoveNext,
+                        onTap: isAnyBulkProcessing ? null : _bulkMoveNext,
                         borderRadius: BorderRadius.circular(100),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                           decoration: BoxDecoration(
-                            color: brandTheme.brassPrimary,
+                            color: brandTheme.brassPrimary.withValues(alpha: isAnyBulkProcessing ? 0.6 : 1.0),
                             borderRadius: BorderRadius.circular(100),
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.arrow_forward_rounded, size: 14, color: brandTheme.onBrass),
+                              if (isAnyBulkProcessing)
+                                SizedBox(
+                                  width: 12,
+                                  height: 12,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(brandTheme.onBrass),
+                                  ),
+                                )
+                              else
+                                Icon(Icons.arrow_forward_rounded, size: 14, color: brandTheme.onBrass),
                               const SizedBox(width: 4),
-                              Text('Promote Selected', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: brandTheme.onBrass)),
+                              Text(
+                                isAnyBulkProcessing ? 'Promoting...' : 'Promote Selected',
+                                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: brandTheme.onBrass),
+                              ),
                             ],
                           ),
                         ),
                       )
                     else
                       InkWell(
-                        onTap: () => _offerSelected(_selectedAppIds.toList()),
+                        onTap: isAnyBulkProcessing ? null : () => _offerSelected(_selectedAppIds.toList()),
                         borderRadius: BorderRadius.circular(100),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                           decoration: BoxDecoration(
-                            color: Colors.green.shade600,
+                            color: Colors.green.shade600.withValues(alpha: isAnyBulkProcessing ? 0.6 : 1.0),
                             borderRadius: BorderRadius.circular(100),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.emoji_events_rounded, size: 14, color: Colors.white),
+                              if (isAnyBulkProcessing)
+                                const SizedBox(
+                                  width: 12,
+                                  height: 12,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              else
+                                const Icon(Icons.emoji_events_rounded, size: 14, color: Colors.white),
                               const SizedBox(width: 4),
-                              Text('Offer Selected', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                              Text(
+                                isAnyBulkProcessing ? 'Offering...' : 'Offer Selected',
+                                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
                             ],
                           ),
                         ),
                       ),
                     const SizedBox(width: 8),
                     InkWell(
-                      onTap: _bulkReject,
+                      onTap: isAnyBulkProcessing ? null : _bulkReject,
                       borderRadius: BorderRadius.circular(100),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
@@ -1447,7 +1557,7 @@ class _RoundManagementScreenState
                     ),
                     const SizedBox(width: 8),
                     InkWell(
-                      onTap: _bulkAbsent,
+                      onTap: isAnyBulkProcessing ? null : _bulkAbsent,
                       borderRadius: BorderRadius.circular(100),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
@@ -1493,39 +1603,50 @@ class _RoundManagementScreenState
   // Action Handlers
   // ---------------------------------------------------------------------------
   void _handleAction(String action, Map<String, dynamic> app) {
+    final appId = app['id'] as String;
     final currentRound = app['current_round'] as int? ?? _selectedRoundNumber ?? 1;
+    if (_promotingAppIds.contains(appId) ||
+        (action == 'move' && _promotedFromRounds.contains('${appId}_$currentRound')) ||
+        (action == 'offer' && _promotedFromRounds.contains('${appId}_offer'))) {
+      return;
+    }
     switch (action) {
       case 'move':
-        _moveToNextRound([app['id']], fromRound: currentRound);
+        _moveToNextRound([appId], fromRound: currentRound);
         break;
       case 'offer':
-        _offerSelected([app['id']]);
+        _offerSelected([appId]);
         break;
       case 'reject':
-        _rejectStudents([app['id']]);
+        _rejectStudents([appId]);
         break;
       case 'absent':
-        _markAbsent([app['id']]);
+        _markAbsent([appId]);
         break;
       case 'remarks':
-        _showRemarksDialog(app['id']);
+        _showRemarksDialog(appId);
         break;
     }
   }
 
   Future<void> _bulkMoveNext() async {
-    await _moveToNextRound(_selectedAppIds.toList(), fromRound: _selectedRoundNumber);
-    setState(() => _selectedAppIds.clear());
+    final roundNumberToPromote = _selectedRoundNumber ?? 1;
+    final candidateIds = _selectedAppIds
+        .where((id) => !_promotingAppIds.contains(id) && !_promotedFromRounds.contains('${id}_$roundNumberToPromote'))
+        .toList();
+    if (candidateIds.isEmpty) return;
+    await _moveToNextRound(candidateIds, fromRound: roundNumberToPromote);
+    if (mounted) setState(() => _selectedAppIds.clear());
   }
 
   Future<void> _bulkReject() async {
     await _rejectStudents(_selectedAppIds.toList());
-    setState(() => _selectedAppIds.clear());
+    if (mounted) setState(() => _selectedAppIds.clear());
   }
 
   Future<void> _bulkAbsent() async {
     await _markAbsent(_selectedAppIds.toList());
-    setState(() => _selectedAppIds.clear());
+    if (mounted) setState(() => _selectedAppIds.clear());
   }
 
   void _refreshAllRoundData() {
@@ -1540,109 +1661,120 @@ class _RoundManagementScreenState
   }
 
   Future<void> _moveToNextRound(List<String> appIds, {int? fromRound}) async {
+    final roundNumberToPromote = fromRound ?? _selectedRoundNumber ?? 1;
+    // 1. Guard against in-flight duplicates and already-promoted students for this round
+    final toProcess = appIds
+        .where((id) => !_promotingAppIds.contains(id) && !_promotedFromRounds.contains('${id}_$roundNumberToPromote'))
+        .toList();
+    if (toProcess.isEmpty) return;
+
+    // 2. IMMEDIATE FRONTEND LOCK: Immediately set state & provide haptic feedback
+    HapticFeedback.lightImpact();
+    setState(() {
+      _promotingAppIds.addAll(toProcess);
+    });
+
     final repo = ref.read(tpoRepositoryProvider);
     final user = Supabase.instance.client.auth.currentUser;
-    final roundNumberToPromote = fromRound ?? _selectedRoundNumber ?? 1;
-    await repo.moveStudentsToNextRound(
-      driveId: widget.drive.id,
-      currentRoundNumber: roundNumberToPromote,
-      applicationIds: appIds,
-      performedBy: user?.id ?? '',
-    );
-    if (!mounted) return;
-    setState(() {
-      _selectedAppIds.removeAll(appIds);
-    });
-    _refreshAllRoundData();
 
-    // Send notifications & emails
     try {
-      final emailService = ref.read(emailNotificationServiceProvider);
-      for (final appId in appIds) {
-        final appData = await Supabase.instance.client
-            .from('applications')
-            .select('student_id, current_round, student:profiles(email, name)')
-            .eq('id', appId)
-            .maybeSingle();
-        if (appData != null) {
-          final studentId = appData['student_id'] as String?;
-          final student = appData['student'] as Map<String, dynamic>?;
-          final email = student?['email'] as String?;
-          final name = (student?['name'] as String?) ?? 'Student';
+      await repo.moveStudentsToNextRound(
+        driveId: widget.drive.id,
+        currentRoundNumber: roundNumberToPromote,
+        applicationIds: toProcess,
+        performedBy: user?.id ?? '',
+      );
 
-          if (email != null && email.contains('@')) {
-            // Look up real round names from cached data
-            final rounds = ref.read(driveRoundsProvider(widget.drive.id)).valueOrNull ?? [];
-            final currentRound = rounds.firstWhere(
-              (r) => r.roundNumber == roundNumberToPromote,
-              orElse: () => rounds.isNotEmpty
-                  ? rounds.first
-                  : DriveRound(
-                      id: '',
-                      driveId: widget.drive.id,
-                      roundNumber: roundNumberToPromote,
-                      roundName: 'Stage $roundNumberToPromote',
-                      createdBy: '',
-                      createdAt: DateTime.now(),
-                    ),
-            );
-            final nextRoundIndex = rounds.indexWhere((r) => r.roundNumber == roundNumberToPromote) + 1;
-            final nextRoundName = nextRoundIndex < rounds.length
-                ? rounds[nextRoundIndex].roundName
-                : (rounds.isNotEmpty ? rounds.last.roundName : 'Next Stage');
+      if (!mounted) return;
 
-            emailService.sendRoundQualifiedEmail(
-              recipientEmail: email,
-              studentName: name,
-              companyName: widget.drive.companyName,
-              qualifiedRound: currentRound.roundName,
-              nextRoundName: nextRoundName,
-            );
-          }
-
-          if (studentId != null && studentId.isNotEmpty) {
-            repo.sendNotification(
-              userId: studentId,
-              title: 'Congratulations! Stage Cleared',
-              body: 'You cleared Stage $roundNumberToPromote for ${widget.drive.companyName}!',
-              type: 'round_clear',
-              driveId: widget.drive.id,
-              applicationId: appId,
-            );
-          }
+      // 3. SUCCESS STATE: Mark as promoted for this specific round, unlock in-flight state
+      setState(() {
+        _promotingAppIds.removeAll(toProcess);
+        for (final id in toProcess) {
+          _promotedFromRounds.add('${id}_$roundNumberToPromote');
         }
-      }
-    } catch (_) {}
+        _selectedAppIds.removeAll(toProcess);
+      });
 
-    if (mounted) {
+      _refreshAllRoundData();
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('✅ ${appIds.length} candidate(s) promoted to next stage!')),
+        SnackBar(
+          content: Text('✅ ${toProcess.length} candidate(s) promoted to next stage!'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      // 4. FAILURE STATE: Stop loading, restore button to Promote, allow retry
+      setState(() {
+        _promotingAppIds.removeAll(toProcess);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Promotion failed: $e. Please retry.'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 3),
+        ),
       );
     }
   }
 
   Future<void> _offerSelected(List<String> appIds) async {
+    final toProcess = appIds
+        .where((id) => !_promotingAppIds.contains(id) && !_promotedFromRounds.contains('${id}_offer'))
+        .toList();
+    if (toProcess.isEmpty) return;
+
+    HapticFeedback.lightImpact();
+    setState(() {
+      _promotingAppIds.addAll(toProcess);
+    });
+
     final repo = ref.read(tpoRepositoryProvider);
     final user = Supabase.instance.client.auth.currentUser;
-    await repo.offerStudents(
-      driveId: widget.drive.id,
-      currentRoundNumber: _selectedRoundNumber ?? 1,
-      applicationIds: appIds,
-      performedBy: user?.id ?? '',
-    );
-    if (!mounted) return;
-    setState(() {
-      _selectedAppIds.removeAll(appIds);
-    });
-    _refreshAllRoundData();
-    ref.invalidate(tpoOffersCountProvider);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('🏆 ${appIds.length} candidate(s) offered selection!'),
-        backgroundColor: Colors.green.shade700,
-      ),
-    );
+    try {
+      await repo.offerStudents(
+        driveId: widget.drive.id,
+        currentRoundNumber: _selectedRoundNumber ?? 1,
+        applicationIds: toProcess,
+        performedBy: user?.id ?? '',
+      );
+      if (!mounted) return;
+
+      setState(() {
+        _promotingAppIds.removeAll(toProcess);
+        for (final id in toProcess) {
+          _promotedFromRounds.add('${id}_offer');
+        }
+        _selectedAppIds.removeAll(toProcess);
+      });
+      _refreshAllRoundData();
+      ref.invalidate(tpoOffersCountProvider);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🏆 ${toProcess.length} candidate(s) offered selection!'),
+          backgroundColor: Colors.green.shade700,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _promotingAppIds.removeAll(toProcess);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Offering selection failed: $e. Please retry.'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   Future<void> _rejectStudents(List<String> appIds) async {

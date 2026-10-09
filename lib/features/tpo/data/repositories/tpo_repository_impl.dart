@@ -930,40 +930,34 @@ class TpoRepositoryImpl implements TpoRepository {
     required String performedBy,
   }) async {
     for (final appId in applicationIds) {
-      // Get application details to check current round
+      // 1. Fetch application details to verify current round and terminal status
       final appData = await _supabase
           .from('applications')
-          .select('student_id, current_round')
+          .select('student_id, current_round, status')
           .eq('id', appId)
           .maybeSingle();
 
       if (appData == null) continue;
       final studentId = appData['student_id'] as String? ?? '';
       final appCurrentRound = appData['current_round'] as int? ?? 1;
+      final appStatus = appData['status'] as String? ?? 'applied';
 
-      // Determine effective round to promote from:
-      // If student is at or ahead of currentRoundNumber, promote from their current round!
-      final fromRound = appCurrentRound >= currentRoundNumber ? appCurrentRound : currentRoundNumber;
-      final nextRound = fromRound + 1;
-
-      // AUTOMATIC PREREQUISITE STAGE COMPLETION:
-      // Mark fromRound and all previous rounds (<= fromRound) as completed/cleared
-      final prevRounds = await _supabase
-          .from('drive_rounds')
-          .select('id, round_number')
-          .eq('drive_id', driveId)
-          .lte('round_number', fromRound);
-
-      for (final r in prevRounds) {
-        await _supabase.from('application_round_status').upsert({
-          'application_id': appId,
-          'round_id': r['id'],
-          'attended': true,
-          'result': 'cleared',
-        }, onConflict: 'application_id,round_id');
+      // 2. BACKEND IDEMPOTENCY GUARD:
+      // If student is already at a round higher than currentRoundNumber,
+      // or already selected/rejected, they have ALREADY been promoted/evaluated for this round!
+      if (currentRoundNumber > 0 && appCurrentRound > currentRoundNumber) {
+        debugPrint('⚠️ [TpoRepository] Student $studentId already at round $appCurrentRound (> $currentRoundNumber). Skipping duplicate promotion.');
+        continue;
+      }
+      if (appStatus == 'selected' || appStatus == 'offered' || appStatus == 'rejected') {
+        debugPrint('⚠️ [TpoRepository] Application $appId already in terminal state ($appStatus). Skipping promotion.');
+        continue;
       }
 
-      // Check if next round exists
+      final fromRound = currentRoundNumber > 0 ? currentRoundNumber : appCurrentRound;
+      final nextRound = fromRound + 1;
+
+      // 3. Check if next round exists
       final nextRoundData = await _supabase
           .from('drive_rounds')
           .select('id')
@@ -971,32 +965,81 @@ class TpoRepositoryImpl implements TpoRepository {
           .eq('round_number', nextRound)
           .maybeSingle();
 
-      if (nextRoundData != null) {
-        // Update current_round and status on the application
-        await _supabase
-            .from('applications')
-            .update({
+      // 4. ATOMIC CONDITIONAL UPDATE:
+      // Enforces concurrency safety: only update if current_round STILL equals fromRound!
+      // If two requests race, whichever commits first advances current_round.
+      final nowIso = DateTime.now().toIso8601String();
+      final updatePayload = nextRoundData != null
+          ? {
               'current_round': nextRound,
               'status': 'shortlisted',
-            })
-            .eq('id', appId);
+              'updated_at': nowIso,
+            }
+          : {
+              'status': 'selected',
+              'updated_at': nowIso,
+            };
 
-        // Create application_round_status for the next round
+      final updatedRows = await _supabase
+          .from('applications')
+          .update(updatePayload)
+          .eq('id', appId)
+          .eq('current_round', fromRound)
+          .select('id, current_round');
+
+      if ((updatedRows as List).isEmpty) {
+        debugPrint('⚠️ [TpoRepository] Atomic conditional update affected 0 rows for appId $appId (current_round changed concurrently). Skipping duplicate promotion.');
+        continue;
+      }
+
+      // 5. Prerequisite round completion (upsert is idempotent due to UNIQUE(application_id, round_id))
+      final prevRounds = await _supabase
+          .from('drive_rounds')
+          .select('id, round_number')
+          .eq('drive_id', driveId)
+          .lte('round_number', fromRound);
+
+      for (final r in (prevRounds as List)) {
+        await _supabase.from('application_round_status').upsert({
+          'application_id': appId,
+          'round_id': r['id'],
+          'attended': true,
+          'result': 'cleared',
+          'updated_at': nowIso,
+        }, onConflict: 'application_id,round_id');
+      }
+
+      if (nextRoundData != null) {
+        // Create pending status for next round (idempotent upsert)
         await _supabase.from('application_round_status').upsert({
           'application_id': appId,
           'round_id': nextRoundData['id'],
           'result': 'pending',
+          'updated_at': nowIso,
         }, onConflict: 'application_id,round_id');
-      } else {
-        // Reached end of pipeline: mark as selected/offered!
-        await _supabase
-            .from('applications')
-            .update({
-              'status': 'selected',
-            })
-            .eq('id', appId);
       }
 
+      // 6. Asynchronous Background Notifications & Emails (non-blocking)
+      unawaited(_dispatchPromotionNotifications(
+        appId: appId,
+        studentId: studentId,
+        driveId: driveId,
+        fromRound: fromRound,
+        nextRound: nextRound,
+        isTerminalOffer: nextRoundData == null,
+      ));
+    }
+  }
+
+  Future<void> _dispatchPromotionNotifications({
+    required String appId,
+    required String studentId,
+    required String driveId,
+    required int fromRound,
+    required int nextRound,
+    required bool isTerminalOffer,
+  }) async {
+    try {
       // Log audit
       try {
         await _auditLogRepo.logAction(
@@ -1008,19 +1051,21 @@ class TpoRepositoryImpl implements TpoRepository {
       } catch (_) {}
 
       // Send notification to student
-      await sendNotification(
-        userId: studentId,
-        title: nextRoundData != null ? 'Round Progress Update' : 'Congratulations! Job Offer',
-        body: nextRoundData != null
-            ? 'Congratulations! You have been promoted to Round $nextRound.'
-            : 'Congratulations! You have cleared all rounds and received a job offer!',
-        type: 'success',
-        driveId: driveId,
-        applicationId: appId,
-      );
+      if (studentId.isNotEmpty) {
+        await sendNotification(
+          userId: studentId,
+          title: !isTerminalOffer ? 'Round Progress Update' : 'Congratulations! Job Offer',
+          body: !isTerminalOffer
+              ? 'Congratulations! You have been promoted to Round $nextRound.'
+              : 'Congratulations! You have cleared all rounds and received a job offer!',
+          type: 'success',
+          driveId: driveId,
+          applicationId: appId,
+        );
+      }
 
       // Email dispatch for round promotion
-      if (_emailService != null) {
+      if (_emailService != null && studentId.isNotEmpty) {
         try {
           final studentProfile = await _supabase
               .from('profiles')
@@ -1039,7 +1084,7 @@ class TpoRepositoryImpl implements TpoRepository {
               .from('drive_rounds')
               .select('round_name')
               .eq('drive_id', driveId)
-              .eq('round_number', currentRoundNumber)
+              .eq('round_number', fromRound)
               .maybeSingle();
           final nextRoundInfo = await _supabase
               .from('drive_rounds')
@@ -1048,12 +1093,12 @@ class TpoRepositoryImpl implements TpoRepository {
               .eq('round_number', nextRound)
               .maybeSingle();
 
-          final currentRoundName = (currentRoundInfo?['round_name'] as String?) ?? 'Round $currentRoundNumber';
+          final currentRoundName = (currentRoundInfo?['round_name'] as String?) ?? 'Round $fromRound';
           final nextRoundName = (nextRoundInfo?['round_name'] as String?) ?? 'Round $nextRound';
 
           if (studentProfile != null && studentProfile['email'] != null && driveInfo != null) {
             final compName = (driveInfo['company'] is Map ? (driveInfo['company'] as Map)['name'] : null) ?? 'Company';
-            _emailService.sendRoundQualifiedEmail(
+            _emailService!.sendRoundQualifiedEmail(
               recipientEmail: studentProfile['email'] as String,
               studentName: (studentProfile['name'] as String?) ?? 'Student',
               companyName: compName,
@@ -1063,6 +1108,8 @@ class TpoRepositoryImpl implements TpoRepository {
           }
         } catch (_) {}
       }
+    } catch (e) {
+      debugPrint('[TpoRepository] Promotion background notification error: $e');
     }
   }
 
@@ -1074,19 +1121,35 @@ class TpoRepositoryImpl implements TpoRepository {
     required String performedBy,
   }) async {
     for (final appId in applicationIds) {
-      // Get student_id for notification
+      // Get student_id and status for idempotency check
       final appData = await _supabase
           .from('applications')
-          .select('student_id')
+          .select('student_id, status')
           .eq('id', appId)
           .maybeSingle();
-      final studentId = appData?['student_id'] as String? ?? '';
+      if (appData == null) continue;
+      final studentId = appData['student_id'] as String? ?? '';
+      final appStatus = appData['status'] as String? ?? 'applied';
 
-      // Update application status to selected
-      await _supabase
+      if (appStatus == 'selected' || appStatus == 'offered') {
+        debugPrint('⚠️ [TpoRepository] Application $appId already offered/selected. Skipping duplicate.');
+        continue;
+      }
+
+      // Atomic conditional update to prevent racing offers
+      final updatedRows = await _supabase
           .from('applications')
-          .update({'status': 'selected'})
-          .eq('id', appId);
+          .update({
+            'status': 'selected',
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', appId)
+          .neq('status', 'selected')
+          .select('id');
+
+      if ((updatedRows as List).isEmpty) {
+        continue;
+      }
 
       // Mark all rounds of this drive as cleared/attended in application_round_status
       final allRounds = await _supabase
